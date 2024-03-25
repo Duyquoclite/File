@@ -8,7 +8,7 @@ axios({
     ascii_encoding: "62", //numeric: 10, normal: 62, high ASCII: 95
     fast_decode: "on",
     special_char: "on",
-    src: console.log(3),
+    src: 'console.log(3)',
   },
   headers: {
     "Content-Type": "application/x-www-form-urlencoded",
