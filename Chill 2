@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Website Mẫu</title>
+  <style>
+    /* Reset CSS cơ bản */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      background: #f4f4f4;
+      color: #333;
+    }
+    
+    /* Phần Header & Navigation */
+    header {
+      background: #333;
+      color: #fff;
+      padding: 10px 0;
+    }
+    
+    .container {
+      width: 90%;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    nav ul {
+      list-style: none;
+      display: flex;
+      justify-content: center;
+    }
+    
+    nav ul li {
+      margin: 0 15px;
+    }
+    
+    nav ul li a {
+      color: #fff;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    
+    /* Phần Hero */
+    #hero {
+      background: url('your-hero-image.jpg') no-repeat center center/cover;
+      height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      text-align: center;
+    }
+    
+    #hero h1 {
+      font-size: 3em;
+      margin-bottom: 10px;
+    }
+    
+    /* Các Section */
+    section {
+      padding: 40px 0;
+      background: #fff;
+      margin-bottom: 20px;
+    }
+    
+    section:nth-of-type(even) {
+      background: #eaeaea;
+    }
+    
+    section h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 2em;
+    }
+    
+    section p {
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: center;
+      font-size: 1.1em;
+    }
+    
+    /* Phần Footer */
+    footer {
+      background: #333;
+      color: #fff;
+      text-align: center;
+      padding: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header & Navigation -->
+  <header>
+    <div class="container">
+      <nav>
+        <ul>
+          <li><a href="#hero">Trang chủ</a></li>
+          <li><a href="#about">Giới thiệu</a></li>
+          <li><a href="#products">Sản phẩm</a></li>
+          <li><a href="#contact">Liên hệ</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+  
+  <!-- Phần Hero -->
+  <section id="hero">
+    <div class="container">
+      <h1>Chào mừng đến với Website của tôi</h1>
+      <p>Website mẫu theo phong cách hiện đại</p>
+    </div>
+  </section>
+  
+  <!-- Phần Giới thiệu -->
+  <section id="about">
+    <div class="container">
+      <h2>Giới thiệu</h2>
+      <p>Đây là phần giới thiệu về website của bạn. Bạn có thể mô tả chi tiết về dịch vụ, sản phẩm hoặc thông tin chung.</p>
+    </div>
+  </section>
+  
+  <!-- Phần Sản phẩm/Dịch vụ -->
+  <section id="products">
+    <div class="container">
+      <h2>Sản phẩm/Dịch vụ</h2>
+      <p>Giới thiệu các sản phẩm hoặc dịch vụ mà bạn cung cấp. Bạn có thể thêm các thẻ hình ảnh, mô tả hoặc liên kết chi tiết.</p>
+    </div>
+  </section>
+  
+  <!-- Phần Liên hệ -->
+  <section id="contact">
+    <div class="container">
+      <h2>Liên hệ</h2>
+      <p>Thông tin liên hệ của bạn, như số điện thoại, email hoặc địa chỉ.</p>
+    </div>
+  </section>
+  
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 Tên công ty. Bảo lưu mọi quyền.</p>
+    </div>
+  </footer>
+</body>
+</html>
