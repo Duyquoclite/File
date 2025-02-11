@@ -1,154 +1,90 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Website Mẫu</title>
-  <style>
-    /* Reset CSS cơ bản */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: Arial, sans-serif;
-      line-height: 1.6;
-      background: #f4f4f4;
-      color: #333;
-    }
-    
-    /* Phần Header & Navigation */
-    header {
-      background: #333;
-      color: #fff;
-      padding: 10px 0;
-    }
-    
-    .container {
-      width: 90%;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    
-    nav ul {
-      list-style: none;
-      display: flex;
-      justify-content: center;
-    }
-    
-    nav ul li {
-      margin: 0 15px;
-    }
-    
-    nav ul li a {
-      color: #fff;
-      text-decoration: none;
-      font-weight: bold;
-    }
-    
-    /* Phần Hero */
-    #hero {
-      background: url('your-hero-image.jpg') no-repeat center center/cover;
-      height: 400px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      text-align: center;
-    }
-    
-    #hero h1 {
-      font-size: 3em;
-      margin-bottom: 10px;
-    }
-    
-    /* Các Section */
-    section {
-      padding: 40px 0;
-      background: #fff;
-      margin-bottom: 20px;
-    }
-    
-    section:nth-of-type(even) {
-      background: #eaeaea;
-    }
-    
-    section h2 {
-      text-align: center;
-      margin-bottom: 20px;
-      font-size: 2em;
-    }
-    
-    section p {
-      max-width: 800px;
-      margin: 0 auto;
-      text-align: center;
-      font-size: 1.1em;
-    }
-    
-    /* Phần Footer */
-    footer {
-      background: #333;
-      color: #fff;
-      text-align: center;
-      padding: 20px 0;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Double Rich Promotion</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            width: 800px;
+            margin: auto;
+            border: 1px solid #ccc;
+        }
+        .header {
+            background-color: red;
+            color: white;
+            text-align: center;
+            font-weight: bold;
+            padding: 10px;
+        }
+        .title {
+            background-color: pink;
+            text-align: center;
+            font-size: 22px;
+            font-weight: bold;
+            padding: 10px;
+        }
+        .content {
+            padding: 10px;
+        }
+        .content table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .content td {
+            vertical-align: top;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+        .section-title {
+            font-weight: bold;
+            color: red;
+        }
+    </style>
 </head>
 <body>
-  <!-- Header & Navigation -->
-  <header>
-    <div class="container">
-      <nav>
-        <ul>
-          <li><a href="#hero">Trang chủ</a></li>
-          <li><a href="#about">Giới thiệu</a></li>
-          <li><a href="#products">Sản phẩm</a></li>
-          <li><a href="#contact">Liên hệ</a></li>
-        </ul>
-      </nav>
+
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        Công nghệ dầu gội dưỡng tóc mới
     </div>
-  </header>
-  
-  <!-- Phần Hero -->
-  <section id="hero">
-    <div class="container">
-      <h1>Chào mừng đến với Website của tôi</h1>
-      <p>Website mẫu theo phong cách hiện đại</p>
+
+    <!-- Title -->
+    <div class="title">
+        Tỏa sáng cùng DOUBLE RICH
     </div>
-  </section>
-  
-  <!-- Phần Giới thiệu -->
-  <section id="about">
-    <div class="container">
-      <h2>Giới thiệu</h2>
-      <p>Đây là phần giới thiệu về website của bạn. Bạn có thể mô tả chi tiết về dịch vụ, sản phẩm hoặc thông tin chung.</p>
+
+    <!-- Content -->
+    <div class="content">
+        <table>
+            <tr>
+                <td width="50%">
+                    <span class="section-title">☑ Sản phẩm khuyến mãi:</span>
+                    <ul>
+                        <li>Dầu gội Double Rich mới 200ml, 400ml có tem khuyến mãi</li>
+                    </ul>
+
+                    <span class="section-title">☑ Đối tượng tham gia:</span>
+                    <ul>
+                        <li>Áp dụng cho tất cả người tiêu dùng cuối cùng mua sản phẩm khuyến mãi.</li>
+                        <li>Chương trình không áp dụng cho nhân viên, nhà phân phối, đại lý, cửa hàng bán lẻ và các cá nhân kinh doanh sản phẩm của công ty LDMP LG Vina, công ty quảng cáo, công ty làm dịch vụ chương trình khuyến mãi này, nhân viên siêu thị.</li>
+                    </ul>
+                </td>
+                <td width="50%">
+                    <span class="section-title">☑ Cách thức nhận giải:</span>
+                    <ol>
+                        <li><b>Giải khuyến khích:</b> Khách hàng đổi quà tại các cửa hàng bán lẻ trên toàn quốc bắt đầu từ ngày 15/06/2005 đến 17h ngày 12/08/2005.</li>
+                        <li><b>Giải đặc biệt, nhất, nhì:</b> Khách hàng cắt phần mã vạch trên mỗi chai dầu gội có khuyến mãi và gửi kèm phiếu trúng thưởng về văn phòng công ty, hạn chót là ngày 31/07/2005 (căn cứ theo dấu bưu điện nơi gửi). Sau đó công ty sẽ gửi thư thông báo trúng thưởng và cách thức nhận quà cho khách hàng.</li>
+                    </ol>
+                </td>
+            </tr>
+        </table>
     </div>
-  </section>
-  
-  <!-- Phần Sản phẩm/Dịch vụ -->
-  <section id="products">
-    <div class="container">
-      <h2>Sản phẩm/Dịch vụ</h2>
-      <p>Giới thiệu các sản phẩm hoặc dịch vụ mà bạn cung cấp. Bạn có thể thêm các thẻ hình ảnh, mô tả hoặc liên kết chi tiết.</p>
-    </div>
-  </section>
-  
-  <!-- Phần Liên hệ -->
-  <section id="contact">
-    <div class="container">
-      <h2>Liên hệ</h2>
-      <p>Thông tin liên hệ của bạn, như số điện thoại, email hoặc địa chỉ.</p>
-    </div>
-  </section>
-  
-  <!-- Footer -->
-  <footer>
-    <div class="container">
-      <p>&copy; 2025 Tên công ty. Bảo lưu mọi quyền.</p>
-    </div>
-  </footer>
+</div>
+
 </body>
 </html>
