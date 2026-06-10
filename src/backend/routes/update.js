@@ -59,7 +59,6 @@ router.get('/status', (req, res) => {
 });
 
 // 1. Download & Apply GitHub Update (Client/All machines)
-// 1. Download & Apply GitHub Update (Client/All machines)
 router.post('/github-apply', async (req, res) => {
   const { repo, branch } = req.body;
   if (!repo) {
@@ -70,25 +69,7 @@ router.post('/github-apply', async (req, res) => {
   const cleanBranch = (branch || 'main').trim();
   const cleanToken = getUpdateKey();
 
-  const wss = req.app.get('wss');
-  const broadcastProgress = (data) => {
-    if (!wss) return;
-    wss.clients.forEach(client => {
-      if (client.readyState === 1) { // OPEN
-        client.send(JSON.stringify({
-          type: 'github-apply-progress',
-          ...data
-        }));
-      }
-    });
-  };
-
   try {
-    broadcastProgress({
-      status: 'downloading',
-      message: 'Đang tải tệp tin ZIP chứa bản cập nhật từ GitHub...'
-    });
-
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
@@ -125,11 +106,6 @@ router.post('/github-apply', async (req, res) => {
       writer.on('error', reject);
     });
 
-    broadcastProgress({
-      status: 'extracting',
-      message: 'Tải thành công. Đang giải nén mã nguồn...'
-    });
-
     // Extract ZIP
     fs.mkdirSync(tempExtractDir, { recursive: true });
     const extractCmd = `powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${tempExtractDir}' -Force"`;
@@ -141,10 +117,6 @@ router.post('/github-apply', async (req, res) => {
       if (err) {
         console.error('[GitHub Update] Extraction failed:', stderr);
         try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch(e) {}
-        broadcastProgress({
-          status: 'error',
-          message: `Lỗi giải nén: ${stderr}`
-        });
         return res.status(500).json({ success: false, error: 'Lỗi giải nén tệp tin cập nhật từ GitHub: ' + stderr });
       }
 
@@ -161,34 +133,8 @@ router.post('/github-apply', async (req, res) => {
           throw new Error('Không tìm thấy thư mục "src" trong kho mã nguồn GitHub.');
         }
 
-        // Count total files to copy
-        const totalFilesToCopy = countFilesRecursive(targetSourceDir);
-        let copiedCount = 0;
-
-        broadcastProgress({
-          status: 'copying',
-          percent: 0,
-          message: `Đang bắt đầu cài đặt ${totalFilesToCopy} tệp tin...`
-        });
-
         // Copy files recursively to project root
-        copyFolderRecursiveWithProgress(targetSourceDir, PROJECT_ROOT, (fileName) => {
-          copiedCount++;
-          const percent = Math.round((copiedCount / totalFilesToCopy) * 100);
-          broadcastProgress({
-            status: 'copying',
-            fileName: fileName,
-            current: copiedCount,
-            total: totalFilesToCopy,
-            percent: percent,
-            message: `Đang sao chép (${copiedCount}/${totalFilesToCopy}): ${fileName}...`
-          });
-        });
-
-        broadcastProgress({
-          status: 'success',
-          message: 'Cập nhật từ GitHub thành công! Máy chủ sẽ khởi động lại sau 10 giây...'
-        });
+        copyFolderRecursive(targetSourceDir, PROJECT_ROOT);
 
         // Success response
         res.json({ success: true, message: 'Cập nhật từ GitHub thành công! Máy chủ sẽ khởi động lại sau 10 giây...' });
@@ -220,10 +166,6 @@ router.post('/github-apply', async (req, res) => {
       } catch (copyErr) {
         console.error('[GitHub Update] Copying failed:', copyErr);
         try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch(e) {}
-        broadcastProgress({
-          status: 'error',
-          message: `Lỗi sao chép: ${copyErr.message}`
-        });
         return res.status(500).json({ success: false, error: 'Lỗi sao chép mã nguồn: ' + copyErr.message });
       }
     });
@@ -233,10 +175,6 @@ router.post('/github-apply', async (req, res) => {
     const msg = error.response?.status === 404
       ? 'Không tìm thấy repository hoặc token không có quyền truy cập.'
       : error.message;
-    broadcastProgress({
-      status: 'error',
-      message: `Lỗi tải mã nguồn: ${msg}`
-    });
     res.status(500).json({ success: false, error: 'Lỗi tải mã nguồn từ GitHub: ' + msg });
   }
 });
@@ -409,67 +347,6 @@ function copyFolderRecursive(source, target) {
     } else {
       fs.mkdirSync(path.dirname(curTarget), { recursive: true });
       fs.copyFileSync(curSource, curTarget);
-    }
-  });
-}
-
-function countFilesRecursive(dir) {
-  let count = 0;
-  if (!fs.existsSync(dir)) return 0;
-  const files = fs.readdirSync(dir);
-  files.forEach(file => {
-    const fullPath = path.join(dir, file);
-
-    // Exclude folders/files
-    if (
-      file === 'profiles' ||
-      file === 'data' ||
-      file === 'node_modules' ||
-      file === 'key.txt' ||
-      file === 'shortcuts' ||
-      file.startsWith('db.sqlite')
-    ) {
-      return;
-    }
-
-    const stat = fs.statSync(fullPath);
-    if (stat.isDirectory()) {
-      count += countFilesRecursive(fullPath);
-    } else {
-      count++;
-    }
-  });
-  return count;
-}
-
-function copyFolderRecursiveWithProgress(source, target, onCopy) {
-  const files = fs.readdirSync(source);
-  files.forEach(file => {
-    const curSource = path.join(source, file);
-    const curTarget = path.join(target, file);
-
-    // Exclude folders/files
-    if (
-      file === 'profiles' ||
-      file === 'data' ||
-      file === 'node_modules' ||
-      file === 'key.txt' ||
-      file === 'shortcuts' ||
-      file.startsWith('db.sqlite')
-    ) {
-      return;
-    }
-
-    const stat = fs.statSync(curSource);
-    if (stat.isDirectory()) {
-      if (!fs.existsSync(curTarget)) {
-        fs.mkdirSync(curTarget, { recursive: true });
-      }
-      copyFolderRecursiveWithProgress(curSource, curTarget, onCopy);
-    } else {
-      fs.mkdirSync(path.dirname(curTarget), { recursive: true });
-      fs.copyFileSync(curSource, curTarget);
-      if (onCopy) onCopy(file);
     }
   });
 }
