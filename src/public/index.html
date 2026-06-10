@@ -514,6 +514,19 @@ await page.screenshot({ path: 'screenshot.png' });</code></pre>
           <!-- Uploaded files log -->
           <div id="uploadProgressLog" style="max-height:120px; overflow-y:auto; font-family:monospace; font-size:11px; background:var(--bg-card); padding:8px; border-radius:4px; border:1px solid var(--border); color:var(--success); line-height:1.4;"></div>
         </div>
+
+        <div id="applyProgressSection" style="display:none; margin-top:16px; border-top:1px dashed var(--border); padding-top:16px;">
+          <h4 style="margin-bottom:8px; font-size:13px; color:var(--text-light);">Tiến trình tải & cài đặt:</h4>
+          <!-- Progress bar -->
+          <div style="width:100%; background:var(--bg-card); border-radius:4px; height:18px; position:relative; overflow:hidden; border:1px solid var(--border); margin-bottom:8px;">
+            <div id="applyProgressBar" style="width:0%; height:100%; background:var(--accent); transition:width 0.2s ease;"></div>
+            <span id="applyProgressText" style="position:absolute; width:100%; text-align:center; top:0; left:0; font-size:11px; line-height:16px; font-weight:bold; color:var(--text-light);">0%</span>
+          </div>
+          <!-- Current file status -->
+          <div id="applyProgressStatus" style="font-size:12px; font-weight:500; color:var(--text); margin-bottom:12px; word-break:break-all;">Đang chuẩn bị...</div>
+          <!-- Copied files log -->
+          <div id="applyProgressLog" style="max-height:120px; overflow-y:auto; font-family:monospace; font-size:11px; background:var(--bg-card); padding:8px; border-radius:4px; border:1px solid var(--border); color:var(--success); line-height:1.4;"></div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" id="btnCancelUpdate">Hủy</button>
