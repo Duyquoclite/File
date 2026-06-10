@@ -54,6 +54,8 @@ router.get('/', (req, res) => {
   }
 });
 
+
+
 // ==================== GET single profile ====================
 router.get('/:id', (req, res) => {
   try {
@@ -188,7 +190,7 @@ router.post('/bulk-create', (req, res) => {
 // ==================== UPDATE profile ====================
 router.put('/:id', (req, res) => {
   try {
-    const { name, notes, proxy, proxyType } = req.body;
+    const { name, notes, proxy, proxyType, fingerprint } = req.body;
     const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
     const profile = stmt.get(req.params.id);
     if (!profile) {
@@ -211,6 +213,7 @@ router.put('/:id', (req, res) => {
     const proxyIpParam = Object.prototype.hasOwnProperty.call(req.body, 'proxyIp') ? req.body.proxyIp : null;
     const proxyCountryParam = Object.prototype.hasOwnProperty.call(req.body, 'proxyCountry') ? req.body.proxyCountry : null;
     const proxyTimezoneParam = Object.prototype.hasOwnProperty.call(req.body, 'proxyTimezone') ? req.body.proxyTimezone : null;
+    const fingerprintParam = fingerprint !== undefined ? JSON.stringify(fingerprint) : null;
 
     if (proxyIpParam !== null) {
       proxyLastIp = proxyIpParam;
@@ -229,6 +232,7 @@ router.put('/:id', (req, res) => {
         proxyCategory = ?,
         proxyLastIp = ?,
         proxyUnchangedChecks = ?,
+        fingerprint = CASE WHEN ? IS NULL THEN fingerprint ELSE ? END,
         updatedAt = datetime('now')
       WHERE id = ?
     `);
@@ -241,6 +245,7 @@ router.put('/:id', (req, res) => {
       proxyCategory,
       proxyLastIp,
       proxyUnchangedChecks,
+      fingerprintParam, fingerprintParam,
       req.params.id);
 
     res.json({ success: true, data: { id: req.params.id } });
@@ -480,6 +485,117 @@ router.post('/bulk-delete', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// ==================== SHARE profiles ====================
+router.post('/share', async (req, res) => {
+  try {
+    const { ids, clientId } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: 'profile ids are required' });
+    }
+
+    const wss = req.app.get('wss');
+    let clientWs = null;
+    if (wss && clientId) {
+      for (const client of wss.clients) {
+        if (client.clientId === clientId && client.readyState === 1 /* OPEN */) {
+          clientWs = client;
+          break;
+        }
+      }
+    }
+
+    if (clientWs) {
+      clientWs.send(JSON.stringify({
+        type: 'share-progress',
+        status: 'start',
+        percent: 0,
+        message: 'Khởi tạo thư mục chia sẻ...'
+      }));
+    }
+
+    const shareId = uuidv4();
+    const sharesDir = path.join(__dirname, '..', '..', 'public', 'shares');
+    const targetShareDir = path.join(sharesDir, `share_${shareId}`);
+    fs.mkdirSync(targetShareDir, { recursive: true });
+
+    function getRelativeFilesList(dir, baseDir) {
+      const list = [];
+      if (!fs.existsSync(dir)) return list;
+      const filesList = fs.readdirSync(dir);
+      for (const file of filesList) {
+        const fullPath = path.join(dir, file);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          list.push(...getRelativeFilesList(fullPath, baseDir));
+        } else {
+          const rel = path.relative(baseDir, fullPath).replace(/\\/g, '/');
+          list.push(rel);
+        }
+      }
+      return list;
+    }
+
+    // Get profiles and scripts
+    const placeholders = ids.map(() => '?').join(',');
+    const profiles = db.prepare(`SELECT * FROM profiles WHERE id IN (${placeholders})`).all(...ids);
+    const scripts = db.prepare(`SELECT * FROM scripts WHERE profileId IN (${placeholders})`).all(...ids);
+
+    // Close and copy directories recursively
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      if (chromeService.isRunning(id)) {
+        await chromeService.closeProfile(id);
+      }
+
+      if (clientWs) {
+        clientWs.send(JSON.stringify({
+          type: 'share-progress',
+          status: 'copying',
+          percent: Math.round((i / ids.length) * 80),
+          message: `Đang sao chép profile ${i + 1}/${ids.length}...`
+        }));
+      }
+
+      const profileDir = path.join(__dirname, '..', '..', 'profiles', id);
+      const destProfileDir = path.join(targetShareDir, 'profiles', id);
+      if (fs.existsSync(profileDir)) {
+        fs.mkdirSync(path.dirname(destProfileDir), { recursive: true });
+        fs.cpSync(profileDir, destProfileDir, { recursive: true });
+      }
+    }
+
+    if (clientWs) {
+      clientWs.send(JSON.stringify({
+        type: 'share-progress',
+        status: 'saving',
+        percent: 85,
+        message: 'Thiết lập danh mục tệp tin...'
+      }));
+    }
+
+    const files = getRelativeFilesList(path.join(targetShareDir, 'profiles'), targetShareDir);
+    const metadata = { profiles, scripts, files };
+    fs.writeFileSync(path.join(targetShareDir, 'metadata.json'), JSON.stringify(metadata, null, 2));
+
+    const host = req.get('host');
+    const shareLink = `https://${host}/shares/share_${shareId}`;
+
+    if (clientWs) {
+      clientWs.send(JSON.stringify({
+        type: 'share-progress',
+        status: 'success',
+        percent: 100,
+        message: 'Đóng gói hoàn thành!'
+      }));
+    }
+
+    res.json({ success: true, shareLink });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 
 router.get('/status/running', (req, res) => {
   const running = chromeService.getRunningProfiles();
