@@ -1,0 +1,27 @@
+{
+  "name": "chrome-profile-manager",
+  "version": "1.0.0",
+  "description": "Multi-Chrome Profile Manager with fingerprint spoofing, proxy support, and JS automation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.17.0",
+    "better-sqlite3": "^11.6.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "https-proxy-agent": "^9.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "proxy-chain": "^3.0.0",
+    "puppeteer-core": "^23.7.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "rcedit": "^4.0.1",
+    "socks-proxy-agent": "^10.0.0",
+    "uuid": "^11.0.3",
+    "ws": "^8.18.0",
+    "archiver": "^7.0.1"
+  }
+}
