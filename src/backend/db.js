@@ -108,5 +108,10 @@ try {
   // Already exists
 }
 
+try {
+  db.exec(`UPDATE profiles SET owner = 'admin' WHERE owner IS NULL OR owner != 'admin'`);
+} catch (e) {
+  // Already done or error
+}
 
 module.exports = db;
