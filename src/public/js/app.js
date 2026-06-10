@@ -1134,6 +1134,35 @@ function connectWS() {
         } else if (data.status === 'error') {
           if (progressStatus) progressStatus.innerHTML = `<span style="color:var(--error); font-weight:bold;">❌ ${esc(data.message)}</span>`;
         }
+      } else if (data.type === 'github-apply-progress') {
+        const progressSection = document.getElementById('applyProgressSection');
+        const progressBar = document.getElementById('applyProgressBar');
+        const progressText = document.getElementById('applyProgressText');
+        const progressStatus = document.getElementById('applyProgressStatus');
+        const progressLog = document.getElementById('applyProgressLog');
+
+        if (progressSection) progressSection.style.display = 'block';
+
+        if (data.status === 'downloading' || data.status === 'extracting') {
+          if (progressBar) progressBar.style.width = '0%';
+          if (progressText) progressText.textContent = '0%';
+          if (progressStatus) progressStatus.textContent = data.message;
+          if (progressLog) progressLog.innerHTML = '';
+        } else if (data.status === 'copying') {
+          if (progressBar) progressBar.style.width = `${data.percent}%`;
+          if (progressText) progressText.textContent = `${data.percent}%`;
+          if (progressStatus) progressStatus.textContent = data.message;
+          if (progressLog) {
+            progressLog.innerHTML += `<div style="color:var(--success);">✓ Đã ghi đè: ${esc(data.fileName)}</div>`;
+            progressLog.scrollTop = progressLog.scrollHeight;
+          }
+        } else if (data.status === 'success') {
+          if (progressBar) progressBar.style.width = '100%';
+          if (progressText) progressText.textContent = '100%';
+          if (progressStatus) progressStatus.innerHTML = `<span style="color:var(--success); font-weight:bold;">✅ ${esc(data.message)}</span>`;
+        } else if (data.status === 'error') {
+          if (progressStatus) progressStatus.innerHTML = `<span style="color:var(--error); font-weight:bold;">❌ ${esc(data.message)}</span>`;
+        }
       }
       if (logOut) logOut.scrollTop = logOut.scrollHeight;
     };
@@ -1509,6 +1538,8 @@ loadProfiles().then(() => {
       // Hide progress on open
       const progressSection = document.getElementById('uploadProgressSection');
       if (progressSection) progressSection.style.display = 'none';
+      const applySection = document.getElementById('applyProgressSection');
+      if (applySection) applySection.style.display = 'none';
 
       const repo = (updateGithubRepoInput ? updateGithubRepoInput.value.trim() : '') || 'Duyquoclite/File';
       const branch = (updateGithubBranchInput ? updateGithubBranchInput.value.trim() : '') || 'main';
