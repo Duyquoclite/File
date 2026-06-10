@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ok mai</title>
+  <title>quất chrome</title>
   <meta name="description"
     content="Manage multiple Chrome browser profiles with unique fingerprints, proxies, and automation">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -488,16 +488,16 @@ await page.screenshot({ path: 'screenshot.png' });</code></pre>
         <button class="btn-close" id="btnCloseUpdateModal">✕</button>
       </div>
       <div class="modal-body">
-        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px;">
-          Đồng bộ mã nguồn trực tiếp từ kho lưu trữ GitHub của bạn.
-        </p>
-        <div class="form-group">
-          <label for="updateGithubRepo">GitHub Repository (owner/repo)</label>
-          <input type="text" id="updateGithubRepo" placeholder="VD: Duyquoclite/File" autocomplete="off">
+        <!-- Hidden inputs for JS compatibility -->
+        <div style="display:none;">
+          <input type="text" id="updateGithubRepo" value="Duyquoclite/File">
+          <input type="text" id="updateGithubBranch" value="main">
         </div>
-        <div class="form-group" style="margin-top:12px;">
-          <label for="updateGithubBranch">Nhánh (Branch)</label>
-          <input type="text" id="updateGithubBranch" placeholder="main" value="main" autocomplete="off">
+
+        <div id="latestUpdateInfo" style="margin-bottom:16px; font-size:14px; line-height:1.5; color:var(--text-light);">
+          <span style="font-weight:500; color:var(--text-muted);">Bản cập nhật mới nhất trên GitHub:</span>
+          <div id="latestUpdateTime" style="font-weight:bold; color:var(--accent); font-size:15px; margin-top:4px;">Đang tải thông tin...</div>
+          <div id="latestCommitMsg" style="font-size:12px; color:var(--text-muted); margin-top:4px; font-style:italic; line-height:1.4;"></div>
         </div>
         <div id="uploadSection" style="display:none; margin-top:16px; border-top:1px dashed var(--border); padding-top:16px;">
           <button class="btn btn-success" id="btnUploadUpdate" style="width:100%;">📤 Đẩy mã nguồn lên GitHub</button>
