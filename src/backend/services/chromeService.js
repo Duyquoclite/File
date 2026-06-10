@@ -43,25 +43,7 @@ function cleanupStaleProfileLock(userDataDir) {
   }
 }
 
-/**
- * Clean up any remaining zombie Chrome processes on startup (since this is Windows local use)
- */
-function killOrphanedChromes() {
-  try {
-    const { exec } = require('child_process');
-    // Taskkill will exit with code 128 if chrome.exe is not running. That's perfectly fine.
-    exec('taskkill /F /IM chrome.exe', (err) => {
-      if (!err) {
-        console.log('[Server Startup] Cleaned up running chrome instances successfully.');
-      }
-    });
-  } catch (err) {
-    console.warn('Could not kill orphaned chrome processes:', err.message);
-  }
-}
 
-// Run the process cleanup once when this module loads
-killOrphanedChromes();
 
 /**
  * Find Chrome executable on Windows
