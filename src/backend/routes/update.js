@@ -29,6 +29,7 @@ function getAllFiles(dirPath, arrayOfFiles = {}) {
       file === 'node_modules' ||
       file === 'profiles' ||
       file === 'data' ||
+      file === 'shares' ||
       file === '.git' ||
       file === 'key.txt' ||
       file === 'shortcuts' ||
@@ -354,6 +355,7 @@ function copyFolderRecursive(source, target) {
     if (
       file === 'profiles' ||
       file === 'data' ||
+      file === 'shares' ||
       file === 'node_modules' ||
       file === 'key.txt' ||
       file === 'shortcuts' ||
