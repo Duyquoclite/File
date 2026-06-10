@@ -36,6 +36,7 @@ app.use('/api/update', require('./backend/routes/update'));
 
 // ====== WebSocket for real-time logs ======
 const wss = new WebSocketServer({ server, path: '/ws' });
+app.set('wss', wss);
 
 wss.on('connection', (ws) => {
   console.log('[WS] Client connected');
