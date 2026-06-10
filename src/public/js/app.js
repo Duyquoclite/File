@@ -9,6 +9,7 @@ let currentFingerprintDraft = null;
 let ws = null;
 const hiddenGroups = new Set(JSON.parse(localStorage.getItem('hiddenGroups') || '[]'));
 let layoutMode = localStorage.getItem('layoutMode') || 'column';
+const clientId = 'client_' + Math.random().toString(36).substring(2, 15);
 
 // ====== API Helpers ======
 async function api(url, opts = {}) {
@@ -910,27 +911,27 @@ async function showDetail(id) {
     </div>
 
     <div class="detail-section">
-      <h4>Fingerprint <button class="btn btn-ghost btn-sm" id="btnToggleFP" style="margin-left:12px;">Hiện</button></h4>
-      <div id="detailFingerprint" style="display:none;">
-      <div class="detail-grid">
-        <div class="detail-item"><div class="label">User Agent</div><div class="value">${esc(fp.userAgent || '—')}</div></div>
-        <div class="detail-item"><div class="label">Brands</div><div class="value">${esc(uaBrands)}</div></div>
-        <div class="detail-item"><div class="label">Platform</div><div class="value">${esc(fp.platform || '—')}</div></div>
-        <div class="detail-item"><div class="label">Language</div><div class="value">${fp.languages ? fp.languages.join(', ') : '—'}</div></div>
-        <div class="detail-item"><div class="label">Timezone</div><div class="value">${esc(fp.timezone || '—')}</div></div>
-        <div class="detail-item"><div class="label">Do Not Track</div><div class="value">${doNotTrack}</div></div>
-        <div class="detail-item"><div class="label">Screen</div><div class="value">${fp.screen ? fp.screen.width + 'x' + fp.screen.height : '—'}</div></div>
-        <div class="detail-item"><div class="label">Touch Points</div><div class="value">${touchPoints}</div></div>
-        <div class="detail-item"><div class="label">WebGL Renderer</div><div class="value">${esc(fp.webgl?.renderer || '—')}</div></div>
-        <div class="detail-item"><div class="label">WebGL Vendor</div><div class="value">${esc(webglVendor)}</div></div>
-        <div class="detail-item"><div class="label">GPU</div><div class="value">${esc(gpuName)}</div></div>
-        <div class="detail-item"><div class="label">GPU Vendor</div><div class="value">${esc(gpuVendor)}</div></div>
-        <div class="detail-item"><div class="label">GPU Arch</div><div class="value">${esc(gpuArch)}</div></div>
-        <div class="detail-item"><div class="label">CPU Cores</div><div class="value">${fp.hardwareConcurrency || '—'}</div></div>
-        <div class="detail-item"><div class="label">RAM</div><div class="value">${fp.deviceMemory ? fp.deviceMemory + ' GB' : '—'}</div></div>
-        <div class="detail-item"><div class="label">Fonts</div><div class="value">${fontPreview}${fontCount ? ' + ' + fontCount + ' fonts' : ''}</div></div>
-        <div class="detail-item"><div class="label">History Length</div><div class="value">${historyLength}</div></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h4 style="margin:0;">Fingerprint</h4>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-secondary btn-sm" id="btnRandomEditFp" type="button">Random fingerprint</button>
+          <button class="btn btn-ghost btn-sm" id="btnToggleFP" type="button">Hiện</button>
         </div>
+      </div>
+      <div id="detailFingerprint" style="display:none;" class="fp-details">
+        <div class="fp-item"><span>User Agent</span><input type="text" id="editFpUA" list="uaList" value="${esc(fp.userAgent || '')}"></div>
+        <div class="fp-item"><span>Platform</span><input type="text" id="editFpPlatform" list="platformList" value="${esc(fp.platform || 'Win32')}"></div>
+        <div class="fp-item"><span>Screen</span>
+          <div style="display:flex; gap:8px;">
+            <input type="number" id="editFpScreenWidth" value="${fp.screen?.width || 1920}" min="800" style="width:100px;">
+            <input type="number" id="editFpScreenHeight" value="${fp.screen?.height || 1080}" min="600" style="width:100px;">
+          </div>
+        </div>
+        <div class="fp-item"><span>Language</span><input type="text" id="editFpLang" list="langList" value="${fp.languages ? fp.languages.join(', ') : 'vi-VN, en-US'}"></div>
+        <div class="fp-item"><span>Timezone</span><input type="text" id="editFpTZ" list="tzList" value="${esc(fp.timezone || 'Asia/Ho_Chi_Minh')}"></div>
+        <div class="fp-item"><span>WebGL</span><input type="text" id="editFpWebGL" list="webglList" value="${esc(fp.webgl?.renderer || '')}"></div>
+        <div class="fp-item"><span>CPU Cores</span><input type="number" id="editFpCores" value="${fp.hardwareConcurrency || 8}" min="1" style="width:100px;"></div>
+        <div class="fp-item"><span>RAM</span><input type="number" id="editFpRAM" value="${fp.deviceMemory || 16}" min="1" style="width:100px;"></div>
       </div>
     </div>
     <div class="detail-section">
@@ -939,6 +940,30 @@ async function showDetail(id) {
     </div>
   `;
 
+  function getEditFingerprintFromFields() {
+    const ua = document.getElementById('editFpUA').value.trim();
+    const platform = document.getElementById('editFpPlatform').value;
+    const width = parseInt(document.getElementById('editFpScreenWidth').value, 10) || 1920;
+    const height = parseInt(document.getElementById('editFpScreenHeight').value, 10) || 1080;
+    const languages = document.getElementById('editFpLang').value.split(',').map(v => v.trim()).filter(Boolean);
+    const timezone = document.getElementById('editFpTZ').value.trim();
+    const webgl = document.getElementById('editFpWebGL').value.trim();
+    const cores = parseInt(document.getElementById('editFpCores').value, 10) || undefined;
+    const ram = parseInt(document.getElementById('editFpRAM').value, 10) || undefined;
+
+    const resFp = {
+      userAgent: ua || undefined,
+      platform,
+      screen: { width, height },
+      languages,
+      timezone: timezone || undefined,
+      hardwareConcurrency: cores,
+      deviceMemory: ram,
+    };
+    if (webgl) resFp.webgl = { renderer: webgl };
+    return resFp;
+  }
+
   document.getElementById('btnSaveDetail').onclick = async () => {
     const editProxyStatusEl = document.getElementById('editProxyStatus');
     const body = {
@@ -946,6 +971,7 @@ async function showDetail(id) {
       notes: document.getElementById('editNotes').value,
       proxy: document.getElementById('editProxy').value,
       proxyType: document.getElementById('editProxyType').value,
+      fingerprint: getEditFingerprintFromFields()
     };
     // Append proxy metadata only if a check was performed (dataset populated)
     if (editProxyStatusEl?.dataset.proxyIp) {
@@ -982,6 +1008,29 @@ async function showDetail(id) {
       fpVisible = !fpVisible;
       fpContainer.style.display = fpVisible ? 'block' : 'none';
       btnToggleFP.textContent = fpVisible ? 'Ẩn' : 'Hiện';
+    };
+  }
+
+  // Attach random edit fingerprint
+  const btnRandomEditFp = document.getElementById('btnRandomEditFp');
+  if (btnRandomEditFp) {
+    btnRandomEditFp.onclick = async () => {
+      const res = await api('/profiles/fingerprint-sample');
+      if (res.success) {
+        const sample = res.data;
+        document.getElementById('editFpUA').value = sample.userAgent || '';
+        document.getElementById('editFpPlatform').value = sample.platform || 'Win32';
+        document.getElementById('editFpScreenWidth').value = sample.screen?.width || 1920;
+        document.getElementById('editFpScreenHeight').value = sample.screen?.height || 1080;
+        document.getElementById('editFpLang').value = sample.languages ? sample.languages.join(', ') : 'vi-VN, en-US';
+        document.getElementById('editFpTZ').value = sample.timezone || 'Asia/Ho_Chi_Minh';
+        document.getElementById('editFpWebGL').value = sample.webgl?.renderer || '';
+        document.getElementById('editFpCores').value = sample.hardwareConcurrency || 8;
+        document.getElementById('editFpRAM').value = sample.deviceMemory || 16;
+        toast('Đã random fingerprint mới!', 'success');
+      } else {
+        toast('Lỗi random fingerprint: ' + res.error, 'error');
+      }
     };
   }
 }
@@ -1048,6 +1097,9 @@ function connectWS() {
   try {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ action: 'register', clientId }));
+    };
     ws.onclose = () => {
       setTimeout(connectWS, 2000);
     };
@@ -1068,6 +1120,10 @@ function connectWS() {
             logOut.innerHTML += `<div class="log-line error">❌ ${esc(data.error)}</div>`;
           }
         }
+      } else if (data.type === 'share-progress') {
+        setProgressOverlay('Đang đóng gói profile...', data.message, data.percent);
+      } else if (data.type === 'import-progress') {
+        setProgressOverlay('Đang tải và cài đặt profile...', data.message, data.percent);
       } else if (data.type === 'github-push-progress') {
         const progressSection = document.getElementById('uploadProgressSection');
         const progressBar = document.getElementById('uploadProgressBar');
@@ -1419,7 +1475,7 @@ if (btnRunBulkScript) {
 }
 
 // ====== Init ======
-loadProfiles().then(() => {
+loadProfiles();
   setInterval(autoResolveDuplicateDynamicIPs, 60000);
 
   // Sync top scrollbar helper with profileGrid
@@ -1649,6 +1705,77 @@ loadProfiles().then(() => {
     };
   }
 
+
+
+  const btnBulkShare = document.getElementById('btnBulkShare');
+  if (btnBulkShare) {
+    btnBulkShare.onclick = async () => {
+      const hostname = window.location.hostname;
+      const port = window.location.port;
+      const isLocalhostOrPort = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || (port && port !== '' && port !== '80' && port !== '443');
+
+      if (isLocalhostOrPort) {
+        const proceed = await showConfirm({
+          title: '⚠️ Cảnh báo Host/Port',
+          message: 'Bạn đang sử dụng localhost hoặc cổng tùy chỉnh. Giao thức HTTPS không thể hoạt động chính xác trừ khi bạn mở cổng (port forward) hoặc dùng tên miền HTTPS. Bạn có chắc muốn tiếp tục chia sẻ không?',
+          confirmText: 'Vẫn chia sẻ',
+          cancelText: 'Hủy'
+        });
+        if (!proceed) return;
+      }
+
+      if (selectedIds.size === 0) {
+        toast('Vui lòng chọn ít nhất 1 profile để chia sẻ', 'error');
+        return;
+      }
+
+      btnBulkShare.disabled = true;
+      btnBulkShare.textContent = 'Đang nén...';
+      setProgressOverlay('Đang đóng gói profile...', 'Đang chuẩn bị...', 0);
+
+      try {
+        const res = await api('/profiles/share', {
+          method: 'POST',
+          body: { ids: Array.from(selectedIds), clientId }
+        });
+
+        if (res.success) {
+          document.getElementById('shareResultLink').value = res.shareLink;
+          const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '::1';
+          const warningBox = document.getElementById('localhostWarningBox');
+          if (warningBox) warningBox.style.display = isLocalhost ? 'block' : 'none';
+          openModal('shareModal');
+          toast('Chia sẻ profile thành công!', 'success');
+        } else {
+          toast(res.error || 'Chia sẻ thất bại.', 'error');
+        }
+      } catch (err) {
+        toast('Lỗi kết nối: ' + err.message, 'error');
+      } finally {
+        btnBulkShare.disabled = false;
+        btnBulkShare.textContent = '📤 Chia sẻ';
+        hideProgressOverlay();
+      }
+    };
+  }
+
+  const btnCloseShareModal = document.getElementById('btnCloseShareModal');
+  if (btnCloseShareModal) btnCloseShareModal.onclick = () => closeModal('shareModal');
+  const btnDismissShare = document.getElementById('btnDismissShare');
+  if (btnDismissShare) btnDismissShare.onclick = () => closeModal('shareModal');
+
+  const btnCopyShareLink = document.getElementById('btnCopyShareLink');
+  if (btnCopyShareLink) {
+    btnCopyShareLink.onclick = () => {
+      const copyText = document.getElementById('shareResultLink');
+      copyText.select();
+      copyText.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(copyText.value);
+      toast('Đã copy link chia sẻ vào Clipboard!', 'success');
+    };
+  }
+
+
+
   applyLayoutMode();
-});
 connectWS();
