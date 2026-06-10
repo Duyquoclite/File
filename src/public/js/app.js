@@ -11,6 +11,70 @@ const hiddenGroups = new Set(JSON.parse(localStorage.getItem('hiddenGroups') || 
 let layoutMode = localStorage.getItem('layoutMode') || 'column';
 const clientId = 'client_' + Math.random().toString(36).substring(2, 15);
 
+const BASE_LANGUAGES = [
+  { lang: 'en', regions: ['US', 'GB', 'CA', 'AU', 'NZ', 'IN', 'ZA', 'IE'] },
+  { lang: 'vi', regions: ['VN'] },
+  { lang: 'zh', regions: ['CN', 'TW', 'HK'] },
+  { lang: 'es', regions: ['ES', 'MX', 'AR', 'CO', 'CL', 'PE', 'VE'] },
+  { lang: 'fr', regions: ['FR', 'CA', 'BE', 'CH'] },
+  { lang: 'de', regions: ['DE', 'AT', 'CH'] },
+  { lang: 'pt', regions: ['PT', 'BR'] },
+  { lang: 'ja', regions: ['JP'] },
+  { lang: 'ko', regions: ['KR'] },
+  { lang: 'ru', regions: ['RU', 'BY', 'KZ', 'UA'] },
+  { lang: 'ar', regions: ['SA', 'EG', 'AE', 'QA', 'DZ', 'MA'] },
+  { lang: 'tr', regions: ['TR'] },
+  { lang: 'it', regions: ['IT', 'CH'] },
+  { lang: 'th', regions: ['TH'] },
+  { lang: 'id', regions: ['ID'] },
+  { lang: 'ms', regions: ['MY'] },
+  { lang: 'fil', regions: ['PH'] },
+  { lang: 'nl', regions: ['NL', 'BE'] },
+  { lang: 'pl', regions: ['PL'] },
+  { lang: 'uk', regions: ['UA'] },
+  { lang: 'ro', regions: ['RO'] },
+  { lang: 'hu', regions: ['HU'] },
+  { lang: 'el', regions: ['GR'] },
+  { lang: 'cs', regions: ['CZ'] },
+  { lang: 'sv', regions: ['SE'] },
+  { lang: 'he', regions: ['IL'] },
+  { lang: 'da', regions: ['DK'] },
+  { lang: 'fi', regions: ['FI'] },
+  { lang: 'nb', regions: ['NO'] },
+  { lang: 'sk', regions: ['SK'] },
+  { lang: 'hr', regions: ['HR'] },
+  { lang: 'bg', regions: ['BG'] },
+  { lang: 'lt', regions: ['LT'] },
+  { lang: 'et', regions: ['EE'] },
+  { lang: 'lv', regions: ['LV'] },
+  { lang: 'sl', regions: ['SI'] },
+  { lang: 'ca', regions: ['ES'] },
+  { lang: 'sr', regions: ['RS'] },
+  { lang: 'hi', regions: ['IN'] },
+  { lang: 'bn', regions: ['BD', 'IN'] },
+  { lang: 'fa', regions: ['IR'] },
+  { lang: 'ur', regions: ['PK'] },
+  { lang: 'sw', regions: ['KE', 'TZ'] },
+  { lang: 'af', regions: ['ZA'] },
+  { lang: 'am', regions: ['ET'] },
+  { lang: 'zu', regions: ['ZA'] },
+  { lang: 'ha', regions: ['NG'] },
+];
+
+const langOptions = [];
+for (const item of BASE_LANGUAGES) {
+  const { lang, regions } = item;
+  for (const region of regions) {
+    const locale = `${lang}-${region}`;
+    if (lang !== 'en') {
+      langOptions.push(`${locale}, ${lang}, en-US, en`);
+      langOptions.push(`${locale}, ${lang}`);
+    } else {
+      langOptions.push(`${locale}, ${lang}`);
+    }
+  }
+}
+
 // ====== API Helpers ======
 async function api(url, opts = {}) {
   opts.headers = {
@@ -927,7 +991,7 @@ async function showDetail(id) {
             <input type="number" id="editFpScreenHeight" value="${fp.screen?.height || 1080}" min="600" style="width:100px;">
           </div>
         </div>
-        <div class="fp-item"><span>Language</span><input type="text" id="editFpLang" list="langList" value="${fp.languages ? fp.languages.join(', ') : 'vi-VN, en-US'}"></div>
+        <div class="fp-item"><span>Language</span><select id="editFpLang"></select></div>
         <div class="fp-item"><span>Timezone</span><input type="text" id="editFpTZ" list="tzList" value="${esc(fp.timezone || 'Asia/Ho_Chi_Minh')}"></div>
         <div class="fp-item"><span>WebGL</span><input type="text" id="editFpWebGL" list="webglList" value="${esc(fp.webgl?.renderer || '')}"></div>
         <div class="fp-item"><span>CPU Cores</span><input type="number" id="editFpCores" value="${fp.hardwareConcurrency || 8}" min="1" style="width:100px;"></div>
@@ -990,6 +1054,19 @@ async function showDetail(id) {
 
   document.getElementById('btnCheckEditProxy').onclick = () => checkProxyUI('editProxy', 'editProxyType', 'editProxyStatus');
 
+  const currentLangVal = fp.languages ? fp.languages.join(', ') : 'vi-VN, vi, en-US, en';
+  const editFpLangSelect = document.getElementById('editFpLang');
+  if (editFpLangSelect) {
+    editFpLangSelect.innerHTML = langOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+    if (![...editFpLangSelect.options].some(o => o.value === currentLangVal)) {
+      const opt = document.createElement('option');
+      opt.value = currentLangVal;
+      opt.textContent = currentLangVal;
+      editFpLangSelect.appendChild(opt);
+    }
+    editFpLangSelect.value = currentLangVal;
+  }
+
   if (p.proxy && p.proxyType !== 'none' && !p.proxyCountry && !p.proxyTimezone) {
     await ensureProxyMetadata('editProxy', 'editProxyType', 'editProxyStatus');
     const infoEl = document.getElementById('editProxyInfo');
@@ -1022,7 +1099,19 @@ async function showDetail(id) {
         document.getElementById('editFpPlatform').value = sample.platform || 'Win32';
         document.getElementById('editFpScreenWidth').value = sample.screen?.width || 1920;
         document.getElementById('editFpScreenHeight').value = sample.screen?.height || 1080;
-        document.getElementById('editFpLang').value = sample.languages ? sample.languages.join(', ') : 'vi-VN, en-US';
+        
+        const langVal = sample.languages ? sample.languages.join(', ') : 'vi-VN, vi, en-US, en';
+        const selectEl = document.getElementById('editFpLang');
+        if (selectEl) {
+          if (![...selectEl.options].some(o => o.value === langVal)) {
+            const opt = document.createElement('option');
+            opt.value = langVal;
+            opt.textContent = langVal;
+            selectEl.appendChild(opt);
+          }
+          selectEl.value = langVal;
+        }
+
         document.getElementById('editFpTZ').value = sample.timezone || 'Asia/Ho_Chi_Minh';
         document.getElementById('editFpWebGL').value = sample.webgl?.renderer || '';
         document.getElementById('editFpCores').value = sample.hardwareConcurrency || 8;
@@ -1777,5 +1866,10 @@ loadProfiles();
 
 
 
+  const fpLangSelect = document.getElementById('fpLang');
+  if (fpLangSelect) {
+    fpLangSelect.innerHTML = langOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+  }
+
   applyLayoutMode();
-connectWS();
+  connectWS();
