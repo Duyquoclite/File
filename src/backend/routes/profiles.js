@@ -16,7 +16,6 @@ const fs = require('fs');
 router.get('/', (req, res) => {
   try {
     const { search, limit = 100, offset = 0 } = req.query;
-    const owner = req.user.username;
     let stmt;
     let profiles;
 
@@ -24,14 +23,14 @@ router.get('/', (req, res) => {
       const q = `%${search.trim()}%`;
       stmt = db.prepare(`
         SELECT * FROM profiles
-        WHERE owner = ? AND (name LIKE ? OR id LIKE ? OR notes LIKE ?)
+        WHERE name LIKE ? OR id LIKE ? OR notes LIKE ?
         ORDER BY createdAt DESC
         LIMIT ? OFFSET ?
       `);
-      profiles = stmt.all(owner, q, q, q, Number(limit), Number(offset));
+      profiles = stmt.all(q, q, q, Number(limit), Number(offset));
     } else {
-      stmt = db.prepare('SELECT * FROM profiles WHERE owner = ? ORDER BY createdAt DESC LIMIT ? OFFSET ?');
-      profiles = stmt.all(owner, Number(limit), Number(offset));
+      stmt = db.prepare('SELECT * FROM profiles ORDER BY createdAt DESC LIMIT ? OFFSET ?');
+      profiles = stmt.all(Number(limit), Number(offset));
     }
 
     // Add running status and check for custom icon
@@ -46,8 +45,8 @@ router.get('/', (req, res) => {
       };
     });
 
-    const countStmt = db.prepare('SELECT COUNT(*) as total FROM profiles WHERE owner = ?');
-    const { total } = countStmt.get(owner);
+    const countStmt = db.prepare('SELECT COUNT(*) as total FROM profiles');
+    const { total } = countStmt.get();
 
     res.json({ success: true, data: { profiles, total } });
   } catch (error) {
@@ -58,9 +57,8 @@ router.get('/', (req, res) => {
 // ==================== GET single profile ====================
 router.get('/:id', (req, res) => {
   try {
-    const owner = req.user.username;
-    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?');
-    const profile = stmt.get(req.params.id, owner);
+    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
+    const profile = stmt.get(req.params.id);
     if (!profile) {
       return res.status(404).json({ success: false, error: 'Profile not found' });
     }
@@ -78,7 +76,6 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   try {
     const { name, notes, proxy, proxyType, fingerprint: customFingerprint, iconBase64 } = req.body;
-    const owner = req.user.username;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, error: 'Name is required' });
     }
@@ -92,8 +89,8 @@ router.post('/', (req, res) => {
     const proxyLastIp = req.body.proxyIp || '';
 
     const stmt = db.prepare(`
-      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, owner, rotationUrl, proxyCategory, proxyLastIp, proxyUnchangedChecks)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, rotationUrl, proxyCategory, proxyLastIp, proxyUnchangedChecks)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       id,
@@ -105,7 +102,6 @@ router.post('/', (req, res) => {
       req.body.proxyCountry || '',
       req.body.proxyTimezone || '',
       JSON.stringify(fingerprint),
-      owner,
       '',
       proxyCategory,
       proxyLastIp,
@@ -142,15 +138,14 @@ router.post('/bulk-create', (req, res) => {
   try {
     const { count = 1, namePrefix = 'Profile', startIndex = 1, proxy, proxyType } = req.body;
     const start = Number(startIndex);
-    const owner = req.user.username;
     const created = [];
 
     const proxyCategory = (proxy && proxyType !== 'none') ? 'undetermined' : '';
     const proxyLastIp = req.body.proxyIp || '';
 
     const stmt = db.prepare(`
-      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, owner, proxyCategory, proxyLastIp, proxyUnchangedChecks)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, proxyCategory, proxyLastIp, proxyUnchangedChecks)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const insertMany = db.transaction((count) => {
@@ -174,7 +169,6 @@ router.post('/bulk-create', (req, res) => {
           req.body.proxyCountry || '',
           req.body.proxyTimezone || '',
           JSON.stringify(fingerprint),
-          owner,
           proxyCategory,
           proxyLastIp,
           0
@@ -195,9 +189,8 @@ router.post('/bulk-create', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const { name, notes, proxy, proxyType } = req.body;
-    const owner = req.user.username;
-    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?');
-    const profile = stmt.get(req.params.id, owner);
+    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
+    const profile = stmt.get(req.params.id);
     if (!profile) {
       return res.status(404).json({ success: false, error: 'Profile not found' });
     }
@@ -237,7 +230,7 @@ router.put('/:id', (req, res) => {
         proxyLastIp = ?,
         proxyUnchangedChecks = ?,
         updatedAt = datetime('now')
-      WHERE id = ? AND owner = ?
+      WHERE id = ?
     `);
 
     updateStmt.run(name, notes, proxy, proxyType,
@@ -248,7 +241,7 @@ router.put('/:id', (req, res) => {
       proxyCategory,
       proxyLastIp,
       proxyUnchangedChecks,
-      req.params.id, owner);
+      req.params.id);
 
     res.json({ success: true, data: { id: req.params.id } });
   } catch (error) {
@@ -259,9 +252,8 @@ router.put('/:id', (req, res) => {
 // ==================== REGENERATE fingerprint ====================
 router.post('/:id/regenerate-fingerprint', (req, res) => {
   try {
-    const owner = req.user.username;
-    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?');
-    const profile = stmt.get(req.params.id, owner);
+    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
+    const profile = stmt.get(req.params.id);
     if (!profile) {
       return res.status(404).json({ success: false, error: 'Profile not found' });
     }
@@ -271,8 +263,8 @@ router.post('/:id/regenerate-fingerprint', (req, res) => {
     }
 
     const fingerprint = generateFingerprint();
-    const updateStmt = db.prepare('UPDATE profiles SET fingerprint = ?, updatedAt = datetime(\'now\') WHERE id = ? AND owner = ?');
-    updateStmt.run(JSON.stringify(fingerprint), req.params.id, owner);
+    const updateStmt = db.prepare('UPDATE profiles SET fingerprint = ?, updatedAt = datetime(\'now\') WHERE id = ?');
+    updateStmt.run(JSON.stringify(fingerprint), req.params.id);
 
     res.json({ success: true, data: { fingerprint } });
   } catch (error) {
@@ -283,9 +275,8 @@ router.post('/:id/regenerate-fingerprint', (req, res) => {
 // ==================== DUPLICATE profile ====================
 router.post('/:id/duplicate', async (req, res) => {
   try {
-    const owner = req.user.username;
-    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?');
-    const sourceProfile = stmt.get(req.params.id, owner);
+    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
+    const sourceProfile = stmt.get(req.params.id);
     if (!sourceProfile) {
       return res.status(404).json({ success: false, error: 'Profile not found' });
     }
@@ -305,8 +296,8 @@ router.post('/:id/duplicate', async (req, res) => {
     }
 
     const insertStmt = db.prepare(`
-      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, owner, proxyCategory, proxyLastIp, proxyUnchangedChecks)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, proxyCategory, proxyLastIp, proxyUnchangedChecks)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     insertStmt.run(
@@ -319,7 +310,6 @@ router.post('/:id/duplicate', async (req, res) => {
       sourceProfile.proxyCountry || '',
       sourceProfile.proxyTimezone || '',
       sourceProfile.fingerprint,
-      owner,
       sourceProfile.proxyCategory || '',
       sourceProfile.proxyLastIp || '',
       sourceProfile.proxyUnchangedChecks || 0
@@ -334,9 +324,8 @@ router.post('/:id/duplicate', async (req, res) => {
 // ==================== DELETE profile ====================
 router.delete('/:id', async (req, res) => {
   try {
-    const owner = req.user.username;
-    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?');
-    const profile = stmt.get(req.params.id, owner);
+    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
+    const profile = stmt.get(req.params.id);
     if (!profile) {
       return res.status(404).json({ success: false, error: 'Profile not found' });
     }
@@ -346,8 +335,8 @@ router.delete('/:id', async (req, res) => {
       await chromeService.closeProfile(req.params.id);
     }
 
-    const delStmt = db.prepare('DELETE FROM profiles WHERE id = ? AND owner = ?');
-    delStmt.run(req.params.id, owner);
+    const delStmt = db.prepare('DELETE FROM profiles WHERE id = ?');
+    delStmt.run(req.params.id);
 
     // Delete scripts
     const scriptStmt = db.prepare('DELETE FROM scripts WHERE profileId = ?');
@@ -368,16 +357,15 @@ router.delete('/:id', async (req, res) => {
 // ==================== OPEN profile (launch Chrome) ====================
 router.post('/:id/open', async (req, res) => {
   try {
-    const owner = req.user.username;
-    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?');
-    const profile = stmt.get(req.params.id, owner);
+    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
+    const profile = stmt.get(req.params.id);
     if (!profile) {
       return res.status(404).json({ success: false, error: 'Profile not found' });
     }
 
     const result = await chromeService.launchProfile(profile);
     if (result.success) {
-      db.prepare('UPDATE profiles SET status = ?, openCount = COALESCE(openCount, 0) + 1 WHERE id = ? AND owner = ?').run('running', req.params.id, owner);
+      db.prepare('UPDATE profiles SET status = ?, openCount = COALESCE(openCount, 0) + 1 WHERE id = ?').run('running', req.params.id);
     }
     res.json(result);
   } catch (error) {
@@ -388,16 +376,15 @@ router.post('/:id/open', async (req, res) => {
 // ==================== CLOSE profile ====================
 router.post('/:id/close', async (req, res) => {
   try {
-    const owner = req.user.username;
-    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?');
-    const profile = stmt.get(req.params.id, owner);
+    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
+    const profile = stmt.get(req.params.id);
     if (!profile) {
       return res.status(404).json({ success: false, error: 'Profile not found' });
     }
 
     const result = await chromeService.closeProfile(req.params.id);
     if (result.success) {
-      db.prepare('UPDATE profiles SET status = ? WHERE id = ? AND owner = ?').run('closed', req.params.id, owner);
+      db.prepare('UPDATE profiles SET status = ? WHERE id = ?').run('closed', req.params.id);
     }
     res.json(result);
   } catch (error) {
@@ -413,19 +400,18 @@ router.post('/bulk-open', async (req, res) => {
       return res.status(400).json({ success: false, error: 'ids array is required' });
     }
 
-    const owner = req.user.username;
     const results = {};
-    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?');
+    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
 
     for (const id of ids) {
-      const profile = stmt.get(id, owner);
+      const profile = stmt.get(id);
       if (!profile) {
-        results[id] = { success: false, error: 'Not found or unauthorized' };
+        results[id] = { success: false, error: 'Not found' };
         continue;
       }
       results[id] = await chromeService.launchProfile(profile);
       if (results[id].success) {
-        db.prepare('UPDATE profiles SET status = ?, openCount = COALESCE(openCount, 0) + 1 WHERE id = ? AND owner = ?').run('running', id, owner);
+        db.prepare('UPDATE profiles SET status = ?, openCount = COALESCE(openCount, 0) + 1 WHERE id = ?').run('running', id);
       }
     }
 
@@ -443,19 +429,18 @@ router.post('/bulk-close', async (req, res) => {
       return res.status(400).json({ success: false, error: 'ids array is required' });
     }
 
-    const owner = req.user.username;
     const results = {};
-    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?');
+    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
 
     for (const id of ids) {
-      const profile = stmt.get(id, owner);
+      const profile = stmt.get(id);
       if (!profile) {
-        results[id] = { success: false, error: 'Not found or unauthorized' };
+        results[id] = { success: false, error: 'Not found' };
         continue;
       }
       results[id] = await chromeService.closeProfile(id);
       if (results[id].success) {
-        db.prepare('UPDATE profiles SET status = ? WHERE id = ? AND owner = ?').run('closed', id, owner);
+        db.prepare('UPDATE profiles SET status = ? WHERE id = ?').run('closed', id);
       }
     }
 
@@ -473,17 +458,16 @@ router.post('/bulk-delete', async (req, res) => {
       return res.status(400).json({ success: false, error: 'ids array is required' });
     }
 
-    const owner = req.user.username;
-    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?');
+    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
 
     for (const id of ids) {
-      const profile = stmt.get(id, owner);
+      const profile = stmt.get(id);
       if (!profile) continue;
 
       if (chromeService.isRunning(id)) {
         await chromeService.closeProfile(id);
       }
-      db.prepare('DELETE FROM profiles WHERE id = ? AND owner = ?').run(id, owner);
+      db.prepare('DELETE FROM profiles WHERE id = ?').run(id);
       db.prepare('DELETE FROM scripts WHERE profileId = ?').run(id);
       const profileDir = path.join(__dirname, '..', '..', 'profiles', id);
       if (fs.existsSync(profileDir)) {
@@ -498,18 +482,9 @@ router.post('/bulk-delete', async (req, res) => {
 });
 
 router.get('/status/running', (req, res) => {
-  // Let's filter running profiles by owner
-  const owner = req.user.username;
   const running = chromeService.getRunningProfiles();
   const runningIds = Object.keys(running);
-  let filteredRunning = [];
-  if (runningIds.length > 0) {
-    const placeholders = runningIds.map(() => '?').join(',');
-    const stmt = db.prepare(`SELECT id FROM profiles WHERE owner = ? AND id IN (${placeholders})`);
-    const ownedRunning = stmt.all(owner, ...runningIds).map(r => r.id);
-    filteredRunning = ownedRunning;
-  }
-  res.json({ success: true, data: filteredRunning });
+  res.json({ success: true, data: runningIds });
 });
 
 module.exports = router;
