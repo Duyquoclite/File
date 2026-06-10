@@ -2,40 +2,6 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const jwt = require('jsonwebtoken');
-const { JWT_SECRET } = require('./auth');
-
-// Helper to parse cookies from request header
-function parseCookies(cookieHeader) {
-  const cookies = {};
-  if (!cookieHeader) return cookies;
-  cookieHeader.split(';').forEach(cookie => {
-    const [name, ...rest] = cookie.trim().split('=');
-    if (name) cookies[name] = rest.join('=');
-  });
-  return cookies;
-}
-
-// Optional Auth Middleware
-const optionalAuth = (req, res, next) => {
-  let token = req.headers['authorization'];
-  if (token) {
-    token = token.replace('Bearer ', '');
-  } else {
-    const cookies = parseCookies(req.headers.cookie);
-    token = cookies.authToken;
-  }
-
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      req.user = decoded;
-    } catch (err) {
-      // Ignore invalid token
-    }
-  }
-  next();
-};
 
 
 // Concatenated to bypass GitHub Secret Scanning push protection
@@ -85,10 +51,21 @@ function getSourceCodeContext() {
   return context;
 }
 
-router.get('/history', optionalAuth, (req, res) => {
-  const sessionId = req.query.sessionId;
-  const identifier = req.user ? `user_${req.user.username}` : (sessionId || 'guest');
-  const cleanSessionId = identifier.replace(/[^a-zA-Z0-9_\-]/g, '');
+// Helper to parse cookies from request header
+function parseCookies(cookieHeader) {
+  const cookies = {};
+  if (!cookieHeader) return cookies;
+  cookieHeader.split(';').forEach(cookie => {
+    const [name, ...rest] = cookie.trim().split('=');
+    if (name) cookies[name] = rest.join('=');
+  });
+  return cookies;
+}
+
+router.get('/history', (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const sessionId = cookies.ai_support_session || req.query.sessionId || 'guest';
+  const cleanSessionId = sessionId.replace(/[^a-zA-Z0-9_\-]/g, '');
   const dataDir = path.join(__dirname, '..', '..', 'data');
   const chatLogPath = path.join(dataDir, `chat_${cleanSessionId}.json`);
 
@@ -107,14 +84,15 @@ router.get('/history', optionalAuth, (req, res) => {
   res.json({ success: true, history: [] });
 });
 
-router.post('/chat', optionalAuth, async (req, res) => {
-  const { message, sessionId, history = [] } = req.body;
+router.post('/chat', async (req, res) => {
+  const { message, sessionId: bodySessionId, history = [] } = req.body;
   if (!message) {
     return res.status(400).json({ success: false, error: 'Message is required' });
   }
 
-  const identifier = req.user ? `user_${req.user.username}` : (sessionId || 'guest');
-  const cleanSessionId = identifier.replace(/[^a-zA-Z0-9_\-]/g, '');
+  const cookies = parseCookies(req.headers.cookie);
+  const sessionId = cookies.ai_support_session || bodySessionId || 'guest';
+  const cleanSessionId = sessionId.replace(/[^a-zA-Z0-9_\-]/g, '');
   const dataDir = path.join(__dirname, '..', '..', 'data');
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
