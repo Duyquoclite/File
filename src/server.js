@@ -24,13 +24,9 @@ app.use(express.urlencoded({ limit: '1000mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ====== API Routes ======
-const { router: authRouter, requireAuth } = require('./backend/routes/auth');
-app.use('/api/auth', authRouter);
-
-// Protect API endpoints
-app.use('/api/profiles', requireAuth, require('./backend/routes/profiles'));
-app.use('/api/automation', requireAuth, require('./backend/routes/automation'));
-app.use('/api/proxy', requireAuth, require('./backend/routes/proxy'));
+app.use('/api/profiles', require('./backend/routes/profiles'));
+app.use('/api/automation', require('./backend/routes/automation'));
+app.use('/api/proxy', require('./backend/routes/proxy'));
 app.use('/api/support', require('./backend/routes/support'));
 app.use('/api/update', require('./backend/routes/update'));
 
