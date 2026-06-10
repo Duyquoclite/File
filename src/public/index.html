@@ -37,7 +37,7 @@
       if (favicon) {
         favicon.href = icons[newIndex] + "?v=" + Date.now(); // ép reload, tránh cache
       }
-    }, 100);
+    }, 5000);
     function _getCookie(name) {
       const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
       return match ? match[2] : null;
@@ -129,6 +129,7 @@
         </svg>
         <span id="layoutText">Cột</span>
       </button>
+
       <button class="btn btn-secondary" id="btnCheckUpdate" title="Cập nhật hệ thống">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
@@ -141,6 +142,7 @@
       <button class="btn btn-success btn-sm" id="btnBulkOpen">▶ Mở tất cả</button>
       <button class="btn btn-warning btn-sm" id="btnBulkClose">⏹ Đóng tất cả</button>
       <button class="btn btn-primary btn-sm" id="btnBulkRunScript">🤖 Chạy script</button>
+      <button class="btn btn-primary btn-sm" id="btnBulkShare" style="background: linear-gradient(135deg, #10b981, #059669); border: none;">📤 Chia sẻ</button>
       <button class="btn btn-danger btn-sm" id="btnBulkDelete">🗑 Xóa tất cả</button>
       <button class="btn btn-ghost btn-sm" id="btnCancelSelect">✕ Bỏ chọn</button>
     </div>
@@ -526,13 +528,38 @@ await page.screenshot({ path: 'screenshot.png' });</code></pre>
         <button class="btn btn-primary" id="btnConfirmUpdate">Cập nhật ngay</button>
       </div>
     </div>
+
+
+  <!-- ====== Share Link Modal ====== -->
+  <div class="modal-overlay" id="shareModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>📤 Chia sẻ Profile thành công</h2>
+        <button class="btn-close" id="btnCloseShareModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="localhostWarningBox" style="display:none; background: rgba(243, 156, 18, 0.15); color: #f39c12; border: 1px solid rgba(243, 156, 18, 0.3); padding: 10px; border-radius: 4px; margin-bottom: 12px; font-size: 0.85rem; line-height: 1.4;">
+          ⚠️ <strong>Cảnh báo:</strong> Bạn đang truy cập qua <strong>localhost</strong> / <strong>127.0.0.1</strong>. Link chia sẻ này chỉ hoạt động trên máy của bạn. Để chia sẻ qua máy khác, vui lòng truy cập trang quản lý bằng IP LAN hoặc tên miền.
+        </div>
+        <p style="margin-bottom:12px; color:var(--text-light);">Bản copy của các profile đã được đóng gói thành công. Dưới đây là link chia sẻ:</p>
+        <div class="form-group" style="display:flex; gap:8px;">
+          <input type="text" id="shareResultLink" readonly style="flex:1; background:var(--bg-card); cursor:text;">
+          <button class="btn btn-primary" id="btnCopyShareLink">Copy Link</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnDismissShare">Đóng</button>
+      </div>
+    </div>
   </div>
+
+
 
   <!-- ====== Toast Container ====== -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="/js/app.js"></script>
-  <script src="/js/support.js"></script>
+  <script src="/js/app.js?v=2"></script>
+  <script src="/js/support.js?v=2"></script>
 </body>
 
 </html>
