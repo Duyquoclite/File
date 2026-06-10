@@ -10,31 +10,14 @@ let ws = null;
 const hiddenGroups = new Set(JSON.parse(localStorage.getItem('hiddenGroups') || '[]'));
 let layoutMode = localStorage.getItem('layoutMode') || 'column';
 
-// ====== Auth Helpers ======
-function getCookie(name) {
-  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-  return match ? match[2] : null;
-}
-let authToken = localStorage.getItem('authToken') || getCookie('authToken');
-let isSetupMode = false;
-
 // ====== API Helpers ======
 async function api(url, opts = {}) {
   opts.headers = {
     'Content-Type': 'application/json',
-    ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
     ...(opts.headers || {})
   };
   if (opts.body && typeof opts.body === 'object') opts.body = JSON.stringify(opts.body);
   const r = await fetch(API + url, opts);
-
-  if (r.status === 401) {
-    // Unauthorized -> redirect to login page
-    localStorage.removeItem('authToken');
-    window.location.href = '/login.html';
-    return { success: false, error: 'Unauthorized' };
-  }
-
   const data = await r.json();
   return data;
 }
@@ -1057,28 +1040,6 @@ document.getElementById('btnRunScript').onclick = async () => {
     }
   }
 };
-async function logout() {
-  // Call server to clear cookie
-  try {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      headers: authToken ? { 'Authorization': 'Bearer ' + authToken } : {},
-    });
-  } catch (e) { /* ignore */ }
-
-  // Clear localStorage
-  localStorage.removeItem('authToken');
-  authToken = null;
-
-  // Clear client-side cookies too
-  document.cookie = 'authToken=;expires=' + new Date(0).toUTCString() + ';path=/';
-
-  window.location.href = '/login.html';
-}
-
-const logoutBtn = document.getElementById('btnLogout');
-if (logoutBtn) logoutBtn.onclick = logout;
-
 updateFingerprintMode();
 
 // ====== WebSocket ======
