@@ -1510,6 +1510,31 @@ loadProfiles().then(() => {
       const progressSection = document.getElementById('uploadProgressSection');
       if (progressSection) progressSection.style.display = 'none';
 
+      const repo = (updateGithubRepoInput ? updateGithubRepoInput.value.trim() : '') || 'Duyquoclite/File';
+      const branch = (updateGithubBranchInput ? updateGithubBranchInput.value.trim() : '') || 'main';
+      const timeEl = document.getElementById('latestUpdateTime');
+      const msgEl = document.getElementById('latestCommitMsg');
+
+      if (timeEl) timeEl.textContent = 'Đang tải thông tin...';
+      if (msgEl) msgEl.textContent = '';
+
+      try {
+        // Fetch public commit information from GitHub
+        const ghRes = await fetch(`https://api.github.com/repos/${repo}/commits/${branch}`);
+        if (ghRes.ok) {
+          const data = await ghRes.json();
+          const date = new Date(data.commit.committer.date);
+          const formattedDate = date.toLocaleString('vi-VN');
+          if (timeEl) timeEl.textContent = `${formattedDate}`;
+          if (msgEl) msgEl.textContent = `"${data.commit.message}"`;
+        } else {
+          if (timeEl) timeEl.textContent = 'Không thể kết nối kho lưu trữ GitHub.';
+        }
+      } catch (ghErr) {
+        console.error('Failed to fetch commit info:', ghErr);
+        if (timeEl) timeEl.textContent = 'Lỗi kết nối khi tải thông tin.';
+      }
+
       try {
         const res = await api('/update/status');
         const uploadSection = document.getElementById('uploadSection');
