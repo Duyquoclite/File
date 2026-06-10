@@ -10,6 +10,13 @@ const db = new Database(path.join(DATA_DIR, 'profiles.db'));
 // Enable WAL mode for better concurrent performance
 db.pragma('journal_mode = WAL');
 
+// Drop users table if it exists (auth cleanup)
+try {
+  db.exec('DROP TABLE IF EXISTS users');
+} catch (e) {
+  // Ignore
+}
+
 // Create tables
 db.exec(`
   CREATE TABLE IF NOT EXISTS profiles (
@@ -32,13 +39,6 @@ db.exec(`
     updatedAt TEXT DEFAULT (datetime('now'))
   );
 
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    createdAt TEXT DEFAULT (datetime('now'))
-  );
-
   CREATE TABLE IF NOT EXISTS scripts (
     id TEXT PRIMARY KEY,
     profileId TEXT NOT NULL,
@@ -54,7 +54,7 @@ db.exec(`
   );
 `);
 
-// Migration to add owner column if not exists
+// Migration to add owner column if not exists (kept for structural compatibility)
 try {
   db.exec(`ALTER TABLE profiles ADD COLUMN owner TEXT DEFAULT 'admin'`);
 } catch (e) {
@@ -106,12 +106,6 @@ try {
   db.exec(`ALTER TABLE profiles ADD COLUMN proxyUnchangedChecks INTEGER DEFAULT 0`);
 } catch (e) {
   // Already exists
-}
-
-try {
-  db.exec(`UPDATE profiles SET owner = 'admin' WHERE owner IS NULL OR owner != 'admin'`);
-} catch (e) {
-  // Already done or error
 }
 
 module.exports = db;
