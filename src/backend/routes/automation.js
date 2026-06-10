@@ -12,8 +12,7 @@ const chromeService = require('../services/chromeService');
 // ==================== GET scripts for a profile ====================
 router.get('/:profileId/scripts', (req, res) => {
   try {
-    const owner = req.user.username;
-    const profile = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?').get(req.params.profileId, owner);
+    const profile = db.prepare('SELECT * FROM profiles WHERE id = ?').get(req.params.profileId);
     if (!profile) return res.status(404).json({ success: false, error: 'Profile not found' });
 
     const stmt = db.prepare('SELECT * FROM scripts WHERE profileId = ? ORDER BY createdAt DESC');
@@ -28,8 +27,7 @@ router.get('/:profileId/scripts', (req, res) => {
 router.post('/:profileId/scripts', (req, res) => {
   try {
     const { name, code } = req.body;
-    const owner = req.user.username;
-    const profile = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?').get(req.params.profileId, owner);
+    const profile = db.prepare('SELECT * FROM profiles WHERE id = ?').get(req.params.profileId);
     if (!profile) return res.status(404).json({ success: false, error: 'Profile not found' });
 
     if (!name || !code) {
@@ -50,12 +48,11 @@ router.post('/:profileId/scripts', (req, res) => {
 router.put('/scripts/:scriptId', (req, res) => {
   try {
     const { name, code } = req.body;
-    const owner = req.user.username;
     const script = db.prepare(`
       SELECT s.* FROM scripts s
       JOIN profiles p ON s.profileId = p.id
-      WHERE s.id = ? AND p.owner = ?
-    `).get(req.params.scriptId, owner);
+      WHERE s.id = ?
+    `).get(req.params.scriptId);
     if (!script) return res.status(404).json({ success: false, error: 'Script not found' });
 
     const stmt = db.prepare('UPDATE scripts SET name = COALESCE(?, name), code = COALESCE(?, code) WHERE id = ?');
@@ -69,12 +66,11 @@ router.put('/scripts/:scriptId', (req, res) => {
 // ==================== DELETE a script ====================
 router.delete('/scripts/:scriptId', (req, res) => {
   try {
-    const owner = req.user.username;
     const script = db.prepare(`
       SELECT s.* FROM scripts s
       JOIN profiles p ON s.profileId = p.id
-      WHERE s.id = ? AND p.owner = ?
-    `).get(req.params.scriptId, owner);
+      WHERE s.id = ?
+    `).get(req.params.scriptId);
     if (!script) return res.status(404).json({ success: false, error: 'Script not found' });
 
     const stmt = db.prepare('DELETE FROM scripts WHERE id = ?');
@@ -90,8 +86,7 @@ router.delete('/scripts/:scriptId', (req, res) => {
 router.post('/:profileId/run', async (req, res) => {
   try {
     const { code, scriptId } = req.body;
-    const owner = req.user.username;
-    const profile = db.prepare('SELECT * FROM profiles WHERE id = ? AND owner = ?').get(req.params.profileId, owner);
+    const profile = db.prepare('SELECT * FROM profiles WHERE id = ?').get(req.params.profileId);
     if (!profile) return res.status(404).json({ success: false, error: 'Profile not found' });
 
     let scriptCode = code;
