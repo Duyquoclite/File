@@ -290,11 +290,18 @@
   `;
   document.head.appendChild(style);
 
-  // Generate Unique Session ID to save separate chats
-  let sessionId = localStorage.getItem('ai_support_session');
+  // Helper to set cookie
+  function _setCookie(name, value, days = 365) {
+    const d = new Date();
+    d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+    document.cookie = `${name}=${value};expires=${d.toUTCString()};path=/`;
+  }
+
+  // Generate Unique Session ID to save separate chats using cookie
+  let sessionId = _getCookie('ai_support_session');
   if (!sessionId) {
     sessionId = 'session_' + Math.random().toString(36).substring(2, 15) + '_' + Date.now();
-    localStorage.setItem('ai_support_session', sessionId);
+    _setCookie('ai_support_session', sessionId);
   }
 
   // Create Widget Elements
@@ -619,17 +626,11 @@
     chatSend.disabled = true;
 
     try {
-      const token = localStorage.getItem('authToken') || _getCookie('authToken');
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-      if (token) {
-        headers['Authorization'] = 'Bearer ' + token;
-      }
-
       const response = await fetch('/api/support/chat', {
         method: 'POST',
-        headers: headers,
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           message: text,
           sessionId: sessionId,
@@ -665,17 +666,7 @@
   // Load chat history from server
   async function loadHistory() {
     try {
-      const token = localStorage.getItem('authToken') || _getCookie('authToken');
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-      if (token) {
-        headers['Authorization'] = 'Bearer ' + token;
-      }
-      
-      const response = await fetch(`/api/support/history?sessionId=${sessionId}`, {
-        headers: headers
-      });
+      const response = await fetch(`/api/support/history?sessionId=${sessionId}`);
       const data = await response.json();
       if (data.success && data.history && data.history.length > 0) {
         // Clear default welcome message if there is actual history
