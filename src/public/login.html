@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng nhập/Đăng ký</title>
+  <meta name="description" content="Đăng nhập hoặc đăng ký tài khoản quản trị Chrome Profile Manager">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link id="dynamic-favicon" rel="icon" href="/img/1.png" type="image/png">
+  <style>
+    /* Custom styles for auth page tabs and toggle */
+    .auth-tabs {
+      display: flex;
+      margin-bottom: 24px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 12px;
+      padding: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .auth-tab {
+      flex: 1;
+      text-align: center;
+      padding: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      border-radius: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .auth-tab.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+  </style>
+</head>
+
+<body
+  style="display: flex; min-height: 100vh; background: var(--bg-primary); align-items: center; justify-content: center; margin: 0;">
+
+  <div class="auth-card" style="width: 100%; max-width: 420px; padding: 40px; margin: 20px;">
+    <div class="auth-header">
+      <div class="logo">
+          <circle cx="16" cy="16" r="14" fill="url(#grad1_auth)" stroke="rgba(255,255,255,0.2)" stroke-width="1" />
+          <circle cx="16" cy="16" r="6" fill="#0f0f23" />
+          <circle cx="16" cy="16" r="3" fill="url(#grad2_auth)" />
+          <defs>
+            <linearGradient id="grad1_auth" x1="0" y1="0" x2="32" y2="32">
+              <stop offset="0%" stop-color="#6366f1" />
+              <stop offset="100%" stop-color="#8b5cf6" />
+            </linearGradient>
+            <linearGradient id="grad2_auth" x1="0" y1="0" x2="32" y2="32">
+              <stop offset="0%" stop-color="#06b6d4" />
+              <stop offset="100%" stop-color="#8b5cf6" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h2 id="authTitle">Chrome Manager</h2>
+      <p id="authDesc" style="margin-top: 6px;">Chào mừng bạn đến với trình quản lý Profile</p>
+    </div>
+
+    <!-- Toggle tabs -->
+    <div class="auth-tabs">
+      <div class="auth-tab active" id="tabLogin" onclick="setMode('login')">Đăng Nhập</div>
+      <div class="auth-tab" id="tabRegister" onclick="setMode('register')">Đăng Ký</div>
+    </div>
+
+    <div class="auth-form">
+      <div class="input-group">
+        <span class="input-icon">👤</span>
+        <input type="text" id="authUsername" placeholder="Nhập tài khoản..." autocomplete="off"
+          onkeypress="if(event.key === 'Enter') document.getElementById('authPassword').focus()">
+      </div>
+
+      <div class="input-group">
+        <span class="input-icon">🔒</span>
+        <input type="password" id="authPassword" placeholder="Nhập mật khẩu..." autocomplete="off"
+          onkeypress="if(event.key === 'Enter') submitAuth()">
+      </div>
+
+      <button class="btn-glow" onclick="submitAuth()" style="margin-top: 20px;">
+        <span id="authBtnText">Đăng Nhập</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const icons = [
+      "1.png",
+      "2.png",
+      "3.png",
+    ].map(name => `/img/${name}`);
+    let lastIndex = -1;
+
+    setInterval(() => {
+      let newIndex;
+      do {
+        newIndex = Math.floor(Math.random() * icons.length);
+      } while (newIndex === lastIndex); // tránh trùng với lần trước
+
+      lastIndex = newIndex;
+      const favicon = document.getElementById("dynamic-favicon");
+      if (favicon) {
+        favicon.href = icons[newIndex] + "?v=" + Date.now(); // ép reload, tránh cache
+      }
+    }, 100);
+    let mode = 'login'; // 'login' or 'register'
+
+    // Helper to read a cookie by name
+    function getCookie(name) {
+      const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+      return match ? match[2] : null;
+    }
+
+    // Check if already authenticated → redirect to main page
+    (async function checkExistingSession() {
+      const token = localStorage.getItem('authToken') || getCookie('authToken');
+      if (!token) return;
+
+      try {
+        const res = await fetch('/api/auth/verify', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (data.success) {
+          // Token is still valid, sync to localStorage and redirect
+          localStorage.setItem('authToken', token);
+          window.location.href = '/index.html';
+        }
+      } catch (e) {
+        // Server unreachable or token invalid, stay on login page
+      }
+    })();
+
+    function toast(msg, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toastEl = document.createElement('div');
+      toastEl.className = `toast ${type}`;
+      toastEl.textContent = msg;
+      container.appendChild(toastEl);
+      setTimeout(() => { toastEl.style.opacity = '0'; setTimeout(() => toastEl.remove(), 300); }, 3000);
+    }
+
+    function setMode(newMode) {
+      mode = newMode;
+      const tabLogin = document.getElementById('tabLogin');
+      const tabRegister = document.getElementById('tabRegister');
+      const authTitle = document.getElementById('authTitle');
+      const authDesc = document.getElementById('authDesc');
+      const authBtnText = document.getElementById('authBtnText');
+
+      if (mode === 'login') {
+        tabLogin.classList.add('active');
+        tabRegister.classList.remove('active');
+        authTitle.textContent = 'Đăng Nhập';
+        authDesc.textContent = 'Nhập tài khoản và mật khẩu để tiếp tục';
+        authBtnText.textContent = 'Đăng Nhập';
+      } else {
+        tabRegister.classList.add('active');
+        tabLogin.classList.remove('active');
+        authTitle.textContent = 'Đăng Ký Tài Khoản';
+        authDesc.textContent = 'Tạo tài khoản quản trị mới của bạn';
+        authBtnText.textContent = 'Đăng Ký Ngay';
+      }
+    }
+
+    async function submitAuth() {
+      const username = document.getElementById('authUsername').value.trim();
+      const password = document.getElementById('authPassword').value;
+
+      if (!username || !password) {
+        toast('Vui lòng nhập đầy đủ tài khoản và mật khẩu!', 'error');
+        return;
+      }
+
+      const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          // Save token to localStorage (cookie is set by server)
+          localStorage.setItem('authToken', data.token);
+          window.location.href = '/index.html';
+        } else {
+          toast(data.error || 'Có lỗi xảy ra, vui lòng thử lại!', 'error');
+        }
+      } catch (err) {
+        toast('Lỗi kết nối server!', 'error');
+      }
+    }
+  </script>
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="/js/support.js"></script>
+</body>
+</html>
