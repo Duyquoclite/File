@@ -42,13 +42,6 @@
       const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
       return match ? match[2] : null;
     }
-    const _token = localStorage.getItem('authToken') || _getCookie('authToken');
-    if (!_token) {
-      window.location.href = '/login.html';
-    } else if (!localStorage.getItem('authToken')) {
-      // Cookie exists but localStorage doesn't - sync it
-      localStorage.setItem('authToken', _token);
-    }
   </script>
 
   <!-- ====== Header ====== -->
@@ -84,7 +77,7 @@
           <span class="stat-label">Running</span>
         </div>
       </div>
-      <button id="btnLogout" class="btn btn-ghost" style="padding: 8px 16px;">Đăng xuất</button>
+      <button id="btnLogout" class="btn btn-ghost" style="padding: 8px 16px; display: none;">Đăng xuất</button>
     </div>
   </header>
 
