@@ -1091,19 +1091,51 @@ function connectWS() {
       const data = JSON.parse(e.data);
       const logOut = document.getElementById('logOutput');
       if (data.type === 'log' || data.type === 'console') {
-        logOut.innerHTML += `<div class="log-line log">[LOG] ${esc(data.text)}</div>`;
+        if (logOut) logOut.innerHTML += `<div class="log-line log">[LOG] ${esc(data.text)}</div>`;
       } else if (data.type === 'error') {
-        logOut.innerHTML += `<div class="log-line error">[ERROR] ${esc(data.text)}</div>`;
+        if (logOut) logOut.innerHTML += `<div class="log-line error">[ERROR] ${esc(data.text)}</div>`;
       } else if (data.type === 'info') {
-        logOut.innerHTML += `<div class="log-line info">${esc(data.text)}</div>`;
+        if (logOut) logOut.innerHTML += `<div class="log-line info">${esc(data.text)}</div>`;
       } else if (data.type === 'result') {
-        if (data.success) {
-          logOut.innerHTML += `<div class="log-line info">✅ Hoàn thành${data.result ? ': ' + esc(data.result) : ''}</div>`;
-        } else {
-          logOut.innerHTML += `<div class="log-line error">❌ ${esc(data.error)}</div>`;
+        if (logOut) {
+          if (data.success) {
+            logOut.innerHTML += `<div class="log-line info">✅ Hoàn thành${data.result ? ': ' + esc(data.result) : ''}</div>`;
+          } else {
+            logOut.innerHTML += `<div class="log-line error">❌ ${esc(data.error)}</div>`;
+          }
+        }
+      } else if (data.type === 'github-push-progress') {
+        const progressSection = document.getElementById('uploadProgressSection');
+        const progressBar = document.getElementById('uploadProgressBar');
+        const progressText = document.getElementById('uploadProgressText');
+        const progressStatus = document.getElementById('uploadProgressStatus');
+        const progressLog = document.getElementById('uploadProgressLog');
+
+        if (progressSection) progressSection.style.display = 'block';
+
+        if (data.status === 'start' || data.status === 'fetching_tree') {
+          if (progressBar) progressBar.style.width = '0%';
+          if (progressText) progressText.textContent = '0%';
+          if (progressStatus) progressStatus.textContent = data.message;
+          if (progressLog) progressLog.innerHTML = '';
+        } else if (data.status === 'uploading') {
+          if (progressBar) progressBar.style.width = `${data.percent}%`;
+          if (progressText) progressText.textContent = `${data.percent}%`;
+          if (progressStatus) progressStatus.textContent = data.message;
+        } else if (data.status === 'uploaded') {
+          if (progressLog) {
+            progressLog.innerHTML += `<div style="color:var(--success);">✓ ${esc(data.currentFile)}</div>`;
+            progressLog.scrollTop = progressLog.scrollHeight;
+          }
+        } else if (data.status === 'success') {
+          if (progressBar) progressBar.style.width = '100%';
+          if (progressText) progressText.textContent = '100%';
+          if (progressStatus) progressStatus.innerHTML = `<span style="color:var(--success); font-weight:bold;">✅ ${esc(data.message)}</span>`;
+        } else if (data.status === 'error') {
+          if (progressStatus) progressStatus.innerHTML = `<span style="color:var(--error); font-weight:bold;">❌ ${esc(data.message)}</span>`;
         }
       }
-      logOut.scrollTop = logOut.scrollHeight;
+      if (logOut) logOut.scrollTop = logOut.scrollHeight;
     };
   } catch (e) { /* WS unavailable, use HTTP fallback */ }
 }
@@ -1474,6 +1506,10 @@ loadProfiles().then(() => {
   if (btnCheckUpdate) {
     btnCheckUpdate.onclick = async () => {
       openModal('updateModal');
+      // Hide progress on open
+      const progressSection = document.getElementById('uploadProgressSection');
+      if (progressSection) progressSection.style.display = 'none';
+
       try {
         const res = await api('/update/status');
         const uploadSection = document.getElementById('uploadSection');
@@ -1498,6 +1534,19 @@ loadProfiles().then(() => {
         toast('Vui lòng nhập GitHub Repository (owner/repo).', 'error');
         return;
       }
+
+      // Reset progress UI
+      const progressSection = document.getElementById('uploadProgressSection');
+      const progressBar = document.getElementById('uploadProgressBar');
+      const progressText = document.getElementById('uploadProgressText');
+      const progressStatus = document.getElementById('uploadProgressStatus');
+      const progressLog = document.getElementById('uploadProgressLog');
+
+      if (progressSection) progressSection.style.display = 'block';
+      if (progressBar) progressBar.style.width = '0%';
+      if (progressText) progressText.textContent = '0%';
+      if (progressStatus) progressStatus.textContent = 'Đang chuẩn bị...';
+      if (progressLog) progressLog.innerHTML = '';
 
       btnUploadUpdate.disabled = true;
       btnUploadUpdate.textContent = 'Đang đẩy mã nguồn lên GitHub...';
@@ -1546,17 +1595,17 @@ loadProfiles().then(() => {
         });
 
         if (res.success) {
-          toast('Cập nhật thành công! Server đang khởi động lại...', 'success');
+          toast('Cập nhật thành công! Máy chủ đang chuẩn bị khởi động lại...', 'success');
           closeModal('updateModal');
 
           // Countdown to reload the page
-          let count = 5;
+          let count = 10;
           const interval = setInterval(() => {
             if (count <= 0) {
               clearInterval(interval);
               window.location.reload();
             } else {
-              toast(`Trang sẽ tự tải lại sau ${count} giây...`, 'info');
+              toast(`Hệ thống sẽ tải lại sau ${count} giây...`, 'info');
               count--;
             }
           }, 1000);
