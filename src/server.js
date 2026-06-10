@@ -41,6 +41,11 @@ wss.on('connection', (ws) => {
     try {
       const data = JSON.parse(message);
 
+      if (data.action === 'register') {
+        ws.clientId = data.clientId;
+        return;
+      }
+
       if (data.action === 'run-script') {
         const { profileId, code } = data;
         if (!profileId || !code) {
