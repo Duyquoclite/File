@@ -69,112 +69,136 @@ router.post('/github-apply', async (req, res) => {
   const cleanBranch = (branch || 'main').trim();
   const cleanToken = getUpdateKey();
 
+  const wss = req.app.get('wss');
+  const broadcastProgress = (data) => {
+    if (!wss) return;
+    wss.clients.forEach(client => {
+      if (client.readyState === 1) { // OPEN
+        client.send(JSON.stringify({
+          type: 'github-apply-progress',
+          ...data
+        }));
+      }
+    });
+  };
+
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-
-    const zipPath = path.join(DATA_DIR, 'github_update.zip');
-    const tempExtractDir = path.join(DATA_DIR, 'temp_extract');
-
-    // Clean up any stale temp directories/files
-    try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch (e) {}
-    try { fs.unlinkSync(zipPath); } catch (e) {}
+    broadcastProgress({
+      status: 'downloading',
+      message: 'Đang tải danh sách tệp tin từ GitHub...'
+    });
 
     const headers = {
-      'User-Agent': 'chrome-profile-manager-updater'
+      'User-Agent': 'chrome-profile-manager-updater',
+      'Accept': 'application/vnd.github.v3+json'
     };
     if (cleanToken) {
       headers['Authorization'] = `token ${cleanToken}`;
     }
 
-    const downloadUrl = `https://api.github.com/repos/${cleanRepo}/zipball/${cleanBranch}`;
+    const treeUrl = `https://api.github.com/repos/${cleanRepo}/git/trees/${cleanBranch}?recursive=1`;
+    const treeRes = await axios.get(treeUrl, { headers });
 
-    const writer = fs.createWriteStream(zipPath);
-    const response = await axios({
-      method: 'get',
-      url: downloadUrl,
-      headers: headers,
-      responseType: 'stream'
+    if (!treeRes.data || !treeRes.data.tree) {
+      throw new Error('Không thể tải cấu trúc thư mục từ GitHub.');
+    }
+
+    // Filter to files inside "src/" folder
+    const updateItems = treeRes.data.tree.filter(item => item.type === 'blob' && item.path.startsWith('src/'));
+
+    if (updateItems.length === 0) {
+      throw new Error('Không tìm thấy tệp tin nào trong thư mục "src" trên GitHub.');
+    }
+
+    const totalFiles = updateItems.length;
+    let currentCount = 0;
+
+    broadcastProgress({
+      status: 'copying',
+      percent: 0,
+      message: `Bắt đầu tải và cài đặt ${totalFiles} tệp tin...`
     });
 
-    response.data.pipe(writer);
+    for (const item of updateItems) {
+      const relativePath = item.path.substring(4); // Remove "src/" -> "server.js" etc.
+      const targetPath = path.join(PROJECT_ROOT, relativePath);
 
-    await new Promise((resolve, reject) => {
-      response.data.on('error', reject);
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
-
-    // Extract ZIP
-    fs.mkdirSync(tempExtractDir, { recursive: true });
-    const extractCmd = `powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${tempExtractDir}' -Force"`;
-
-    exec(extractCmd, (err, stdout, stderr) => {
-      // Clean up zip right away
-      try { fs.unlinkSync(zipPath); } catch(e){}
-
-      if (err) {
-        console.error('[GitHub Update] Extraction failed:', stderr);
-        try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch(e) {}
-        return res.status(500).json({ success: false, error: 'Lỗi giải nén tệp tin cập nhật từ GitHub: ' + stderr });
-      }
-
+      let fileBuffer;
       try {
-        // Find the extracted root folder (GitHub names it like owner-repo-commit_sha)
-        const dirs = fs.readdirSync(tempExtractDir).filter(f => fs.statSync(path.join(tempExtractDir, f)).isDirectory());
-        if (dirs.length === 0) {
-          throw new Error('Thư mục giải nén trống.');
+        const contentsUrl = `https://api.github.com/repos/${cleanRepo}/contents/${item.path}?ref=${cleanBranch}`;
+        const rawHeaders = {
+          'User-Agent': 'chrome-profile-manager-updater',
+          'Accept': 'application/vnd.github.v3.raw'
+        };
+        if (cleanToken) {
+          rawHeaders['Authorization'] = `token ${cleanToken}`;
         }
-
-        const sourceDir = path.join(tempExtractDir, dirs[0]);
-        const targetSourceDir = path.join(sourceDir, 'src');
-        if (!fs.existsSync(targetSourceDir)) {
-          throw new Error('Không tìm thấy thư mục "src" trong kho mã nguồn GitHub.');
-        }
-
-        // Copy files recursively to project root
-        copyFolderRecursive(targetSourceDir, PROJECT_ROOT);
-
-        // Success response
-        res.json({ success: true, message: 'Cập nhật từ GitHub thành công! Máy chủ sẽ khởi động lại sau 10 giây...' });
-
-        // Clean up temp extract folder after response
-        setTimeout(() => {
-          try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch(e){}
-
-          // Wait 10 seconds, then spawn restart and exit(1)
-          setTimeout(() => {
-            try {
-              const outLog = fs.openSync(path.join(DATA_DIR, 'out.log'), 'a');
-              const errLog = fs.openSync(path.join(DATA_DIR, 'err.log'), 'a');
-              const serverJs = path.join(PROJECT_ROOT, 'server.js');
-
-              const child = spawn(process.argv[0], [serverJs], {
-                detached: true,
-                stdio: ['ignore', outLog, errLog]
-              });
-              child.unref();
-              process.exit(1);
-            } catch (restartErr) {
-              console.error('[GitHub Update] Failed to restart server:', restartErr);
-              process.exit(1);
-            }
-          }, 10000);
-        }, 1500);
-
-      } catch (copyErr) {
-        console.error('[GitHub Update] Copying failed:', copyErr);
-        try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch(e) {}
-        return res.status(500).json({ success: false, error: 'Lỗi sao chép mã nguồn: ' + copyErr.message });
+        const fileRes = await axios.get(contentsUrl, {
+          headers: rawHeaders,
+          responseType: 'arraybuffer'
+        });
+        fileBuffer = Buffer.from(fileRes.data);
+      } catch (err) {
+        // Fallback to raw github url
+        const rawUrl = `https://raw.githubusercontent.com/${cleanRepo}/${cleanBranch}/${item.path}`;
+        const fileRes = await axios.get(rawUrl, {
+          responseType: 'arraybuffer'
+        });
+        fileBuffer = Buffer.from(fileRes.data);
       }
+
+      // Write to project root
+      fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+      fs.writeFileSync(targetPath, fileBuffer);
+
+      currentCount++;
+      const percent = Math.round((currentCount / totalFiles) * 100);
+
+      broadcastProgress({
+        status: 'copying',
+        fileName: relativePath,
+        current: currentCount,
+        total: totalFiles,
+        percent: percent,
+        message: `Đang tải & cập nhật (${currentCount}/${totalFiles}): ${relativePath}...`
+      });
+    }
+
+    broadcastProgress({
+      status: 'success',
+      message: 'Cập nhật từ GitHub thành công! Máy chủ sẽ khởi động lại sau 10 giây...'
     });
+
+    res.json({ success: true, message: 'Cập nhật từ GitHub thành công! Máy chủ sẽ khởi động lại sau 10 giây...' });
+
+    // Spawn restart and exit after response
+    setTimeout(() => {
+      try {
+        const outLog = fs.openSync(path.join(DATA_DIR, 'out.log'), 'a');
+        const errLog = fs.openSync(path.join(DATA_DIR, 'err.log'), 'a');
+        const serverJs = path.join(PROJECT_ROOT, 'server.js');
+
+        const child = spawn(process.argv[0], [serverJs], {
+          detached: true,
+          stdio: ['ignore', outLog, errLog]
+        });
+        child.unref();
+        process.exit(1);
+      } catch (restartErr) {
+        console.error('[GitHub Update] Failed to restart server:', restartErr);
+        process.exit(1);
+      }
+    }, 10000);
 
   } catch (error) {
     console.error('[GitHub Update] Request failed:', error.message);
     const msg = error.response?.status === 404
       ? 'Không tìm thấy repository hoặc token không có quyền truy cập.'
       : error.message;
+    broadcastProgress({
+      status: 'error',
+      message: `Lỗi tải mã nguồn: ${msg}`
+    });
     res.status(500).json({ success: false, error: 'Lỗi tải mã nguồn từ GitHub: ' + msg });
   }
 });
