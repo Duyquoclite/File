@@ -137,28 +137,30 @@ router.post('/github-apply', async (req, res) => {
         copyFolderRecursive(targetSourceDir, PROJECT_ROOT);
 
         // Success response
-        res.json({ success: true, message: 'Cập nhật từ GitHub thành công! Server đang khởi động lại...' });
+        res.json({ success: true, message: 'Cập nhật từ GitHub thành công! Máy chủ sẽ khởi động lại sau 10 giây...' });
 
         // Clean up temp extract folder after response
         setTimeout(() => {
           try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch(e){}
 
-          // Restart server
-          try {
-            const outLog = fs.openSync(path.join(DATA_DIR, 'out.log'), 'a');
-            const errLog = fs.openSync(path.join(DATA_DIR, 'err.log'), 'a');
-            const serverJs = path.join(PROJECT_ROOT, 'server.js');
+          // Wait 10 seconds, then spawn restart and exit(1)
+          setTimeout(() => {
+            try {
+              const outLog = fs.openSync(path.join(DATA_DIR, 'out.log'), 'a');
+              const errLog = fs.openSync(path.join(DATA_DIR, 'err.log'), 'a');
+              const serverJs = path.join(PROJECT_ROOT, 'server.js');
 
-            const child = spawn(process.argv[0], [serverJs], {
-              detached: true,
-              stdio: ['ignore', outLog, errLog]
-            });
-            child.unref();
-            process.exit(0);
-          } catch (restartErr) {
-            console.error('[GitHub Update] Failed to restart server:', restartErr);
-            process.exit(1);
-          }
+              const child = spawn(process.argv[0], [serverJs], {
+                detached: true,
+                stdio: ['ignore', outLog, errLog]
+              });
+              child.unref();
+              process.exit(1);
+            } catch (restartErr) {
+              console.error('[GitHub Update] Failed to restart server:', restartErr);
+              process.exit(1);
+            }
+          }, 10000);
         }, 1500);
 
       } catch (copyErr) {
@@ -192,9 +194,29 @@ router.post('/github-push', async (req, res) => {
   const cleanRepo = repo.trim();
   const cleanBranch = (branch || 'main').trim();
 
+  const wss = req.app.get('wss');
+  const broadcastProgress = (data) => {
+    if (!wss) return;
+    wss.clients.forEach(client => {
+      if (client.readyState === 1) { // OPEN
+        client.send(JSON.stringify({
+          type: 'github-push-progress',
+          ...data
+        }));
+      }
+    });
+  };
+
   try {
     // A. Gather files
     const localFiles = getAllFiles(PROJECT_ROOT);
+    const totalFiles = Object.keys(localFiles).length;
+
+    broadcastProgress({
+      status: 'start',
+      total: totalFiles,
+      message: `Bắt đầu chuẩn bị tải lên ${totalFiles} tệp tin...`
+    });
 
     const headers = {
       'User-Agent': 'chrome-profile-manager-updater',
@@ -205,6 +227,10 @@ router.post('/github-push', async (req, res) => {
     // B. Fetch existing files in repo to obtain their current SHAs (to update existing files)
     let fileShaMap = {};
     try {
+      broadcastProgress({
+        status: 'fetching_tree',
+        message: `Đang lấy danh sách file hiện tại từ GitHub...`
+      });
       console.log(`[GitHub Push] Fetching file tree for branch: ${cleanBranch}...`);
       const treeUrl = `https://api.github.com/repos/${cleanRepo}/git/trees/${cleanBranch}?recursive=1`;
       const treeRes = await axios.get(treeUrl, { headers });
@@ -220,10 +246,23 @@ router.post('/github-push', async (req, res) => {
     }
 
     // C. Upload each file one by one under 'src/' directory
+    let currentCount = 0;
+    const uploadedFiles = [];
     for (const [relativePath, fileBuffer] of Object.entries(localFiles)) {
+      currentCount++;
+      const percent = Math.round((currentCount / totalFiles) * 100);
       const githubPath = `src/${relativePath}`.replace(/\\/g, '/');
       const base64Content = fileBuffer.toString('base64');
       const existingSha = fileShaMap[githubPath];
+
+      broadcastProgress({
+        status: 'uploading',
+        currentFile: relativePath,
+        current: currentCount,
+        total: totalFiles,
+        percent: percent,
+        message: `Đang tải lên (${currentCount}/${totalFiles}): ${relativePath}...`
+      });
 
       console.log(`[GitHub Push] Uploading ${githubPath}...`);
 
@@ -243,6 +282,19 @@ router.post('/github-push', async (req, res) => {
           payload,
           { headers }
         );
+
+        uploadedFiles.push(relativePath);
+
+        broadcastProgress({
+          status: 'uploaded',
+          currentFile: relativePath,
+          current: currentCount,
+          total: totalFiles,
+          percent: percent,
+          uploadedFiles: uploadedFiles,
+          message: `Đã tải lên: ${relativePath}`
+        });
+
       } catch (uploadErr) {
         console.error(`[GitHub Push] Failed to upload ${githubPath}:`, uploadErr.response?.data || uploadErr.message);
         const details = uploadErr.response?.data?.message || uploadErr.message;
@@ -250,9 +302,20 @@ router.post('/github-push', async (req, res) => {
       }
     }
 
+    broadcastProgress({
+      status: 'success',
+      total: totalFiles,
+      uploadedFiles: uploadedFiles,
+      message: `Đã đẩy ${totalFiles} tệp tin lên thư mục src của GitHub thành công!`
+    });
+
     res.json({ success: true, message: 'Đã đẩy mã nguồn lên thư mục src của GitHub thành công!' });
   } catch (error) {
     console.error('[GitHub Push] Failed:', error.message);
+    broadcastProgress({
+      status: 'error',
+      message: `Lỗi đẩy mã nguồn: ${error.message}`
+    });
     res.status(500).json({ success: false, error: 'Lỗi đẩy mã nguồn lên GitHub: ' + error.message });
   }
 });
