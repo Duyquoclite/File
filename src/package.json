@@ -8,6 +8,7 @@
     "dev": "node server.js"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
     "axios": "^1.17.0",
     "better-sqlite3": "^11.6.0",
     "cors": "^2.8.5",
@@ -21,7 +22,6 @@
     "rcedit": "^4.0.1",
     "socks-proxy-agent": "^10.0.0",
     "uuid": "^11.0.3",
-    "ws": "^8.18.0",
-    "archiver": "^7.0.1"
+    "ws": "^8.18.0"
   }
 }
