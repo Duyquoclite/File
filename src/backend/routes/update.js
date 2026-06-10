@@ -1,0 +1,291 @@
+const express = require('express');
+const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+const { exec, spawn } = require('child_process');
+const axios = require('axios');
+
+const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const PROJECT_ROOT = path.join(__dirname, '..', '..');
+const KEY_FILE = path.join(__dirname, '..', '..', 'key.txt');
+
+// Get token from key.txt (returns empty string if not found)
+function getUpdateKey() {
+  if (!fs.existsSync(KEY_FILE)) {
+    return '';
+  }
+  return fs.readFileSync(KEY_FILE, 'utf8').trim();
+}
+
+// Recursively get all project files excluding profile directories, data, node_modules, database files, and key.txt
+function getAllFiles(dirPath, arrayOfFiles = {}) {
+  const files = fs.readdirSync(dirPath);
+  files.forEach(file => {
+    const fullPath = path.join(dirPath, file);
+    const relativePath = path.relative(PROJECT_ROOT, fullPath).replace(/\\/g, '/');
+
+    // Exclude patterns
+    if (
+      file === 'node_modules' ||
+      file === 'profiles' ||
+      file === 'data' ||
+      file === '.git' ||
+      file === 'key.txt' ||
+      file === 'shortcuts' ||
+      file.startsWith('db.sqlite')
+    ) {
+      return;
+    }
+
+    const stat = fs.statSync(fullPath);
+    if (stat.isDirectory()) {
+      getAllFiles(fullPath, arrayOfFiles);
+    } else {
+      try {
+        const content = fs.readFileSync(fullPath);
+        arrayOfFiles[relativePath] = content;
+      } catch (err) {
+        console.warn(`[Update] Skipping unreadable file ${relativePath}:`, err.message);
+      }
+    }
+  });
+  return arrayOfFiles;
+}
+
+// Check local status (whether the developer key/token exists)
+router.get('/status', (req, res) => {
+  const token = getUpdateKey();
+  return res.json({ success: true, hasKey: token.length > 0 });
+});
+
+// 1. Download & Apply GitHub Update (Client/All machines)
+router.post('/github-apply', async (req, res) => {
+  const { repo, branch } = req.body;
+  if (!repo) {
+    return res.status(400).json({ success: false, error: 'Thiếu thông tin repository (owner/repo).' });
+  }
+
+  const cleanRepo = repo.trim();
+  const cleanBranch = (branch || 'main').trim();
+  const cleanToken = getUpdateKey();
+
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+
+    const zipPath = path.join(DATA_DIR, 'github_update.zip');
+    const tempExtractDir = path.join(DATA_DIR, 'temp_extract');
+
+    // Clean up any stale temp directories/files
+    try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch (e) {}
+    try { fs.unlinkSync(zipPath); } catch (e) {}
+
+    const headers = {
+      'User-Agent': 'chrome-profile-manager-updater'
+    };
+    if (cleanToken) {
+      headers['Authorization'] = `token ${cleanToken}`;
+    }
+
+    const downloadUrl = `https://api.github.com/repos/${cleanRepo}/zipball/${cleanBranch}`;
+
+    const writer = fs.createWriteStream(zipPath);
+    const response = await axios({
+      method: 'get',
+      url: downloadUrl,
+      headers: headers,
+      responseType: 'stream'
+    });
+
+    response.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+      response.data.on('error', reject);
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+
+    // Extract ZIP
+    fs.mkdirSync(tempExtractDir, { recursive: true });
+    const extractCmd = `powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${tempExtractDir}' -Force"`;
+
+    exec(extractCmd, (err, stdout, stderr) => {
+      // Clean up zip right away
+      try { fs.unlinkSync(zipPath); } catch(e){}
+
+      if (err) {
+        console.error('[GitHub Update] Extraction failed:', stderr);
+        try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch(e) {}
+        return res.status(500).json({ success: false, error: 'Lỗi giải nén tệp tin cập nhật từ GitHub: ' + stderr });
+      }
+
+      try {
+        // Find the extracted root folder (GitHub names it like owner-repo-commit_sha)
+        const dirs = fs.readdirSync(tempExtractDir).filter(f => fs.statSync(path.join(tempExtractDir, f)).isDirectory());
+        if (dirs.length === 0) {
+          throw new Error('Thư mục giải nén trống.');
+        }
+
+        const sourceDir = path.join(tempExtractDir, dirs[0]);
+        const targetSourceDir = path.join(sourceDir, 'src');
+        if (!fs.existsSync(targetSourceDir)) {
+          throw new Error('Không tìm thấy thư mục "src" trong kho mã nguồn GitHub.');
+        }
+
+        // Copy files recursively to project root
+        copyFolderRecursive(targetSourceDir, PROJECT_ROOT);
+
+        // Success response
+        res.json({ success: true, message: 'Cập nhật từ GitHub thành công! Server đang khởi động lại...' });
+
+        // Clean up temp extract folder after response
+        setTimeout(() => {
+          try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch(e){}
+
+          // Restart server
+          try {
+            const outLog = fs.openSync(path.join(DATA_DIR, 'out.log'), 'a');
+            const errLog = fs.openSync(path.join(DATA_DIR, 'err.log'), 'a');
+            const serverJs = path.join(PROJECT_ROOT, 'server.js');
+
+            const child = spawn(process.argv[0], [serverJs], {
+              detached: true,
+              stdio: ['ignore', outLog, errLog]
+            });
+            child.unref();
+            process.exit(0);
+          } catch (restartErr) {
+            console.error('[GitHub Update] Failed to restart server:', restartErr);
+            process.exit(1);
+          }
+        }, 1500);
+
+      } catch (copyErr) {
+        console.error('[GitHub Update] Copying failed:', copyErr);
+        try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch(e) {}
+        return res.status(500).json({ success: false, error: 'Lỗi sao chép mã nguồn: ' + copyErr.message });
+      }
+    });
+
+  } catch (error) {
+    console.error('[GitHub Update] Request failed:', error.message);
+    const msg = error.response?.status === 404
+      ? 'Không tìm thấy repository hoặc token không có quyền truy cập.'
+      : error.message;
+    res.status(500).json({ success: false, error: 'Lỗi tải mã nguồn từ GitHub: ' + msg });
+  }
+});
+
+// 2. Upload/Commit local codebase to GitHub (Developer only)
+router.post('/github-push', async (req, res) => {
+  const { repo, branch } = req.body;
+  if (!repo) {
+    return res.status(400).json({ success: false, error: 'Thiếu thông tin repository (owner/repo).' });
+  }
+
+  const token = getUpdateKey();
+  if (!token) {
+    return res.status(403).json({ success: false, error: 'Không tìm thấy token trong key.txt. Bạn không có quyền đẩy mã nguồn.' });
+  }
+
+  const cleanRepo = repo.trim();
+  const cleanBranch = (branch || 'main').trim();
+
+  try {
+    // A. Gather files
+    const localFiles = getAllFiles(PROJECT_ROOT);
+
+    const headers = {
+      'User-Agent': 'chrome-profile-manager-updater',
+      'Authorization': `token ${token}`,
+      'Accept': 'application/vnd.github.v3+json'
+    };
+
+    // B. Fetch existing files in repo to obtain their current SHAs (to update existing files)
+    let fileShaMap = {};
+    try {
+      console.log(`[GitHub Push] Fetching file tree for branch: ${cleanBranch}...`);
+      const treeUrl = `https://api.github.com/repos/${cleanRepo}/git/trees/${cleanBranch}?recursive=1`;
+      const treeRes = await axios.get(treeUrl, { headers });
+      if (treeRes.data && treeRes.data.tree) {
+        treeRes.data.tree.forEach(item => {
+          if (item.type === 'blob') {
+            fileShaMap[item.path] = item.sha;
+          }
+        });
+      }
+    } catch (treeErr) {
+      console.warn('[GitHub Push] Could not fetch tree (assumed empty repository):', treeErr.message);
+    }
+
+    // C. Upload each file one by one under 'src/' directory
+    for (const [relativePath, fileBuffer] of Object.entries(localFiles)) {
+      const githubPath = `src/${relativePath}`.replace(/\\/g, '/');
+      const base64Content = fileBuffer.toString('base64');
+      const existingSha = fileShaMap[githubPath];
+
+      console.log(`[GitHub Push] Uploading ${githubPath}...`);
+
+      const payload = {
+        message: `Sync ${relativePath}`,
+        content: base64Content,
+        branch: cleanBranch
+      };
+
+      if (existingSha) {
+        payload.sha = existingSha;
+      }
+
+      try {
+        await axios.put(
+          `https://api.github.com/repos/${cleanRepo}/contents/${githubPath}`,
+          payload,
+          { headers }
+        );
+      } catch (uploadErr) {
+        console.error(`[GitHub Push] Failed to upload ${githubPath}:`, uploadErr.response?.data || uploadErr.message);
+        const details = uploadErr.response?.data?.message || uploadErr.message;
+        throw new Error(`Lỗi tải lên file "${relativePath}": ${details}`);
+      }
+    }
+
+    res.json({ success: true, message: 'Đã đẩy mã nguồn lên thư mục src của GitHub thành công!' });
+  } catch (error) {
+    console.error('[GitHub Push] Failed:', error.message);
+    res.status(500).json({ success: false, error: 'Lỗi đẩy mã nguồn lên GitHub: ' + error.message });
+  }
+});
+
+function copyFolderRecursive(source, target) {
+  const files = fs.readdirSync(source);
+  files.forEach(file => {
+    const curSource = path.join(source, file);
+    const curTarget = path.join(target, file);
+
+    // Exclude folders/files
+    if (
+      file === 'profiles' ||
+      file === 'data' ||
+      file === 'node_modules' ||
+      file === 'key.txt' ||
+      file === 'shortcuts' ||
+      file.startsWith('db.sqlite')
+    ) {
+      return;
+    }
+
+    const stat = fs.statSync(curSource);
+    if (stat.isDirectory()) {
+      if (!fs.existsSync(curTarget)) {
+        fs.mkdirSync(curTarget, { recursive: true });
+      }
+      copyFolderRecursive(curSource, curTarget);
+    } else {
+      fs.mkdirSync(path.dirname(curTarget), { recursive: true });
+      fs.copyFileSync(curSource, curTarget);
+    }
+  });
+}
+
+module.exports = router;
