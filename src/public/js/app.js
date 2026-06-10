@@ -1083,10 +1083,13 @@ updateFingerprintMode();
 
 // ====== WebSocket ======
 function connectWS() {
-  if (ws && ws.readyState === WebSocket.OPEN) return;
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   try {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    ws.onclose = () => {
+      setTimeout(connectWS, 2000);
+    };
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
       const logOut = document.getElementById('logOutput');
@@ -1554,8 +1557,15 @@ loadProfiles().then(() => {
         const ghRes = await fetch(`https://api.github.com/repos/${repo}/commits/${branch}`);
         if (ghRes.ok) {
           const data = await ghRes.json();
+          const pad = (n) => String(n).padStart(2, '0');
           const date = new Date(data.commit.committer.date);
-          const formattedDate = date.toLocaleString('vi-VN');
+          const day = pad(date.getDate());
+          const month = pad(date.getMonth() + 1);
+          const year = date.getFullYear();
+          const hours = pad(date.getHours());
+          const minutes = pad(date.getMinutes());
+          const seconds = pad(date.getSeconds());
+          const formattedDate = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
           if (timeEl) timeEl.textContent = `${formattedDate}`;
           if (msgEl) msgEl.textContent = `"${data.commit.message}"`;
         } else {
