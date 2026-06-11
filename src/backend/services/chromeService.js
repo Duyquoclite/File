@@ -212,7 +212,7 @@ async function launchProfile(profile) {
         // Title override logic for Facebook domains
         const titleOverrideScript = (pName) => {
           (function() {
-            function checkAndForceTitle() {
+            function forceTitle() {
               const hostname = window.location.hostname;
               if (hostname.includes('facebook.com') || hostname.includes('messenger.com') || hostname.includes('fb.com')) {
                 if (document.title !== pName) {
@@ -233,14 +233,13 @@ async function launchProfile(profile) {
             }
 
             // Run immediately
-            checkAndForceTitle();
+            forceTitle();
+
+            // Run on interval to override any dynamic changes from Facebook (notifications, SPA navigation, etc.)
+            setInterval(forceTitle, 1000);
 
             // Run on title changes using MutationObserver
-            const observer = new MutationObserver(() => {
-              checkAndForceTitle();
-            });
-
-            // Wait for DOM
+            const observer = new MutationObserver(forceTitle);
             const target = document.documentElement;
             if (target) {
               observer.observe(target, {
@@ -250,27 +249,25 @@ async function launchProfile(profile) {
               });
             }
 
-            // Hook document.title descriptor to intercept direct JS assignments
+            // Hook Document.prototype.title descriptor to intercept direct JS assignments
             try {
-              const proto = Object.getPrototypeOf(document);
-              const originalTitleDesc = Object.getOwnPropertyDescriptor(proto, 'title') || 
-                                        Object.getOwnPropertyDescriptor(Document.prototype, 'title') || 
-                                        Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'title');
-              if (originalTitleDesc) {
-                Object.defineProperty(document, 'title', {
+              const desc = Object.getOwnPropertyDescriptor(Document.prototype, 'title') || 
+                           Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'title');
+              if (desc && desc.configurable) {
+                Object.defineProperty(Document.prototype, 'title', {
                   get() {
                     const hostname = window.location.hostname;
                     if (hostname.includes('facebook.com') || hostname.includes('messenger.com') || hostname.includes('fb.com')) {
                       return pName;
                     }
-                    return originalTitleDesc.get.call(document);
+                    return desc.get.call(this);
                   },
                   set(val) {
                     const hostname = window.location.hostname;
                     if (hostname.includes('facebook.com') || hostname.includes('messenger.com') || hostname.includes('fb.com')) {
-                      originalTitleDesc.set.call(document, pName);
+                      desc.set.call(this, pName);
                     } else {
-                      originalTitleDesc.set.call(document, val);
+                      desc.set.call(this, val);
                     }
                   },
                   configurable: true
