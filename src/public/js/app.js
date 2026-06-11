@@ -321,7 +321,7 @@ function renderProfiles() {
     } else if (timezone) {
       detailsHtml = ` - <span style="color: #f1c40f;">${esc(timezone)}</span>`;
     }
-    const headerPrefixHtml = ipKey === 'no-proxy' ? 'Không có proxy' : esc(ipKey);
+    const headerPrefixHtml = ipKey === 'no-proxy' ? 'Không có proxy' : esc(ipKey.replace(/^[a-zA-Z0-9]+:\/*/, ''));
     const headerHtml = `
       <input type="checkbox" class="group-checkbox" ${allSelected ? 'checked' : ''} onclick="toggleGroupSelect('${esc(ipKey)}', event)">
       <span>${headerPrefixHtml}${detailsHtml}</span>
@@ -420,7 +420,7 @@ function renderGroupsManagementList() {
 
   container.innerHTML = Object.keys(groups).map(ipKey => {
     const isChecked = !hiddenGroups.has(ipKey);
-    const label = ipKey === 'no-proxy' ? 'Không có proxy' : ipKey;
+    const label = ipKey === 'no-proxy' ? 'Không có proxy' : ipKey.replace(/^[a-zA-Z0-9]+:\/*/, '');
     const count = groups[ipKey].length;
     return `
       <label style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--bg-glass); border:1px solid var(--border); border-radius:var(--radius-sm); cursor:pointer; margin-bottom: 2px;">
@@ -685,7 +685,12 @@ document.getElementById('btnConfirmCreate').onclick = async () => {
   const proxyAddr = document.getElementById('proxyAddress').value.trim();
   let proxy = '';
   if (proxyType !== 'none' && proxyAddr) {
-    proxy = proxyAddr.includes('://') ? proxyAddr : `${proxyType}://${proxyAddr}`;
+    const schemeMatch = proxyAddr.match(/^([a-zA-Z0-9]+):\/+(.*)$/);
+    if (schemeMatch) {
+      proxy = `${schemeMatch[1].toLowerCase()}://${schemeMatch[2]}`;
+    } else {
+      proxy = `${proxyType}://${proxyAddr}`;
+    }
   }
 
   const proxyStatusEl = document.getElementById('proxyStatus');
@@ -868,9 +873,19 @@ document.getElementById('btnCancelBulk').onclick = () => closeModal('bulkCreateM
 
 document.getElementById('btnConfirmBulk').onclick = async () => {
   const count = parseInt(document.getElementById('bulkCount').value) || 10;
-  const namePrefix = document.getElementById('bulkPrefix').value.trim() || 'Profile'; const startIndex = parseInt(document.getElementById('bulkStart').value) || 1;
+  const namePrefix = document.getElementById('bulkPrefix').value.trim() || 'Profile';
+  const startIndex = parseInt(document.getElementById('bulkStart').value) || 1;
   const proxyType = document.getElementById('bulkProxyType').value;
-  const proxy = document.getElementById('bulkProxy').value.trim();
+  const proxyAddr = document.getElementById('bulkProxy').value.trim();
+  let proxy = '';
+  if (proxyType !== 'none' && proxyAddr) {
+    const schemeMatch = proxyAddr.match(/^([a-zA-Z0-9]+):\/+(.*)$/);
+    if (schemeMatch) {
+      proxy = `${schemeMatch[1].toLowerCase()}://${schemeMatch[2]}`;
+    } else {
+      proxy = `${proxyType}://${proxyAddr}`;
+    }
+  }
 
   const bulkProxyStatusEl = document.getElementById('bulkProxyStatus');
   if (proxy && proxyType !== 'none') {
@@ -955,7 +970,7 @@ async function showDetail(id) {
         <div class="form-group">
           <label>Proxy</label>
           <div style="display:flex; gap:8px;">
-            <input type="text" id="editProxy" value="${esc(p.proxy)}">
+            <input type="text" id="editProxy" value="${esc(p.proxy ? p.proxy.replace(/^[a-zA-Z0-9]+:\/*/, '') : '')}">
             <button class="btn btn-secondary" id="btnCheckEditProxy" type="button" style="padding:0 12px; height:auto;">Kiểm tra</button>
           </div>
           <div id="editProxyInfo" style="font-size:0.8rem; margin-top:8px; color:var(--text-muted);">
@@ -1030,11 +1045,22 @@ async function showDetail(id) {
 
   document.getElementById('btnSaveDetail').onclick = async () => {
     const editProxyStatusEl = document.getElementById('editProxyStatus');
+    const editProxyType = document.getElementById('editProxyType').value;
+    const editProxyAddr = document.getElementById('editProxy').value.trim();
+    let normalizedProxy = '';
+    if (editProxyType !== 'none' && editProxyAddr) {
+      const schemeMatch = editProxyAddr.match(/^([a-zA-Z0-9]+):\/+(.*)$/);
+      if (schemeMatch) {
+        normalizedProxy = `${schemeMatch[1].toLowerCase()}://${schemeMatch[2]}`;
+      } else {
+        normalizedProxy = `${editProxyType}://${editProxyAddr}`;
+      }
+    }
     const body = {
       name: document.getElementById('editName').value,
       notes: document.getElementById('editNotes').value,
-      proxy: document.getElementById('editProxy').value,
-      proxyType: document.getElementById('editProxyType').value,
+      proxy: normalizedProxy,
+      proxyType: editProxyType,
       fingerprint: getEditFingerprintFromFields()
     };
     // Append proxy metadata only if a check was performed (dataset populated)
@@ -1793,77 +1819,6 @@ loadProfiles();
       }
     };
   }
-
-
-
-  const btnBulkShare = document.getElementById('btnBulkShare');
-  if (btnBulkShare) {
-    btnBulkShare.onclick = async () => {
-      const hostname = window.location.hostname;
-      const port = window.location.port;
-      const isLocalhostOrPort = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || (port && port !== '' && port !== '80' && port !== '443');
-
-      if (isLocalhostOrPort) {
-        const proceed = await showConfirm({
-          title: '⚠️ Cảnh báo Host/Port',
-          message: 'Bạn đang sử dụng localhost hoặc cổng tùy chỉnh. Giao thức HTTPS không thể hoạt động chính xác trừ khi bạn mở cổng (port forward) hoặc dùng tên miền HTTPS. Bạn có chắc muốn tiếp tục chia sẻ không?',
-          confirmText: 'Vẫn chia sẻ',
-          cancelText: 'Hủy'
-        });
-        if (!proceed) return;
-      }
-
-      if (selectedIds.size === 0) {
-        toast('Vui lòng chọn ít nhất 1 profile để chia sẻ', 'error');
-        return;
-      }
-
-      btnBulkShare.disabled = true;
-      btnBulkShare.textContent = 'Đang nén...';
-      setProgressOverlay('Đang đóng gói profile...', 'Đang chuẩn bị...', 0);
-
-      try {
-        const res = await api('/profiles/share', {
-          method: 'POST',
-          body: { ids: Array.from(selectedIds), clientId }
-        });
-
-        if (res.success) {
-          document.getElementById('shareResultLink').value = res.shareLink;
-          const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '::1';
-          const warningBox = document.getElementById('localhostWarningBox');
-          if (warningBox) warningBox.style.display = isLocalhost ? 'block' : 'none';
-          openModal('shareModal');
-          toast('Chia sẻ profile thành công!', 'success');
-        } else {
-          toast(res.error || 'Chia sẻ thất bại.', 'error');
-        }
-      } catch (err) {
-        toast('Lỗi kết nối: ' + err.message, 'error');
-      } finally {
-        btnBulkShare.disabled = false;
-        btnBulkShare.textContent = '📤 Chia sẻ';
-        hideProgressOverlay();
-      }
-    };
-  }
-
-  const btnCloseShareModal = document.getElementById('btnCloseShareModal');
-  if (btnCloseShareModal) btnCloseShareModal.onclick = () => closeModal('shareModal');
-  const btnDismissShare = document.getElementById('btnDismissShare');
-  if (btnDismissShare) btnDismissShare.onclick = () => closeModal('shareModal');
-
-  const btnCopyShareLink = document.getElementById('btnCopyShareLink');
-  if (btnCopyShareLink) {
-    btnCopyShareLink.onclick = () => {
-      const copyText = document.getElementById('shareResultLink');
-      copyText.select();
-      copyText.setSelectionRange(0, 99999);
-      navigator.clipboard.writeText(copyText.value);
-      toast('Đã copy link chia sẻ vào Clipboard!', 'success');
-    };
-  }
-
 
 
   const fpLangSelect = document.getElementById('fpLang');
