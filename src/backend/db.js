@@ -108,4 +108,55 @@ try {
   // Already exists
 }
 
+// Sync profiles function
+db.syncProfiles = function() {
+  try {
+    const profilesDir = path.join(__dirname, '..', 'profiles');
+    if (!fs.existsSync(profilesDir)) return;
+
+    const folders = fs.readdirSync(profilesDir).filter(f => fs.statSync(path.join(profilesDir, f)).isDirectory());
+    const { generateFingerprint } = require('./services/fingerprintService');
+    
+    const stmtCheck = db.prepare('SELECT id FROM profiles WHERE id = ?');
+    const stmtInsert = db.prepare(`
+      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, proxyCategory, proxyLastIp, proxyUnchangedChecks)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const folder of folders) {
+      const exists = stmtCheck.get(folder);
+      if (!exists) {
+        console.log(`[Sync] Found unregistered profile folder: ${folder}. Restoring into DB.`);
+        
+        const name = folder; // Use the folder name directly as the profile name
+        const fingerprint = generateFingerprint();
+        stmtInsert.run(
+          folder,
+          name,
+          'Auto-restored from directory',
+          '', // proxy
+          'none', // proxyType
+          '', // proxyIp
+          '', // proxyCountry
+          '', // proxyTimezone
+          JSON.stringify(fingerprint),
+          '', // proxyCategory
+          '', // proxyLastIp
+          0
+        );
+        console.log(`[Sync] Successfully registered profile ${folder} as "${name}"`);
+      }
+    }
+  } catch (syncError) {
+    console.error('[Sync] Error syncing profiles directory:', syncError);
+  }
+};
+
+// Run sync once on load
+try {
+  db.syncProfiles();
+} catch (e) {
+  console.error('[Sync] Initial sync failed:', e);
+}
+
 module.exports = db;
