@@ -15,6 +15,10 @@ const fs = require('fs');
 // ==================== GET all profiles (with search) ====================
 router.get('/', (req, res) => {
   try {
+    // Automatically sync profiles folder with database to restore any deleted folders
+    if (typeof db.syncProfiles === 'function') {
+      db.syncProfiles();
+    }
     const { search, limit = 100, offset = 0 } = req.query;
     let stmt;
     let profiles;
