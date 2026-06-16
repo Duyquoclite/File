@@ -173,8 +173,9 @@ async function launchProfile(profile) {
     }
   }
   if (extPaths.length > 0) {
-    args.push(`--load-extension=${extPaths.join(',')}`);
-    args.push(`--disable-extensions-except=${extPaths.join(',')}`);
+    const formattedPaths = extPaths.map(p => path.resolve(p).replace(/\\/g, '/'));
+    args.push(`--load-extension=${formattedPaths.join(',')}`);
+    args.push(`--disable-extensions-except=${formattedPaths.join(',')}`);
   }
 
   const chromePath = findChromeExecutable();
@@ -187,7 +188,7 @@ async function launchProfile(profile) {
     if (proxyUrl) {
       console.log(`[Chrome] Proxy: ${proxyUrl} ${anonymizedProxyUrl ? '(anonymized)' : ''}`);
     }
-    console.log('[Chrome] Args:', args.filter(a => a.includes('proxy')));
+    console.log('[Chrome] Args:', args);
     console.log(`[Chrome] User Data Dir: ${userDataDir}`);
 
     const launchOptions = {
@@ -195,7 +196,11 @@ async function launchProfile(profile) {
       executablePath: chromePath,
       userDataDir,
       args,
-      ignoreDefaultArgs: ['--enable-automation'],
+      ignoreDefaultArgs: [
+        '--enable-automation',
+        '--disable-extensions',
+        '--disable-component-extensions-with-background-pages'
+      ],
     };
 
     const browser = await puppeteer.launch(launchOptions);
@@ -209,81 +214,7 @@ async function launchProfile(profile) {
           await page.evaluateOnNewDocument(buildFingerprintScript(fingerprint));
         }
 
-        // Title override logic for Facebook domains
-        const titleOverrideScript = (pName) => {
-          (function() {
-            function forceTitle() {
-              const hostname = window.location.hostname;
-              if (hostname.includes('facebook.com') || hostname.includes('messenger.com') || hostname.includes('fb.com')) {
-                if (document.title !== pName) {
-                  const titleEl = document.querySelector('title');
-                  if (titleEl) {
-                    titleEl.textContent = pName;
-                  } else {
-                    const newTitle = document.createElement('title');
-                    newTitle.textContent = pName;
-                    if (document.head) {
-                      document.head.appendChild(newTitle);
-                    } else if (document.documentElement) {
-                      document.documentElement.appendChild(newTitle);
-                    }
-                  }
-                }
-              }
-            }
 
-            // Run immediately
-            forceTitle();
-
-            // Run on interval to override any dynamic changes from Facebook (notifications, SPA navigation, etc.)
-            setInterval(forceTitle, 1000);
-
-            // Run on title changes using MutationObserver
-            const observer = new MutationObserver(forceTitle);
-            const target = document.documentElement;
-            if (target) {
-              observer.observe(target, {
-                subtree: true,
-                childList: true,
-                characterData: true
-              });
-            }
-
-            // Hook Document.prototype.title descriptor to intercept direct JS assignments
-            try {
-              const desc = Object.getOwnPropertyDescriptor(Document.prototype, 'title') || 
-                           Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'title');
-              if (desc && desc.configurable) {
-                Object.defineProperty(Document.prototype, 'title', {
-                  get() {
-                    const hostname = window.location.hostname;
-                    if (hostname.includes('facebook.com') || hostname.includes('messenger.com') || hostname.includes('fb.com')) {
-                      return pName;
-                    }
-                    return desc.get.call(this);
-                  },
-                  set(val) {
-                    const hostname = window.location.hostname;
-                    if (hostname.includes('facebook.com') || hostname.includes('messenger.com') || hostname.includes('fb.com')) {
-                      desc.set.call(this, pName);
-                    } else {
-                      desc.set.call(this, val);
-                    }
-                  },
-                  configurable: true
-                });
-              }
-            } catch (e) {
-              // ignore descriptor hook error
-            }
-          })();
-        };
-
-        // Inject for future document creations
-        await page.evaluateOnNewDocument(titleOverrideScript, profile.name);
-
-        // Run immediately on currently loaded document
-        await page.evaluate(titleOverrideScript, profile.name).catch(() => {});
 
       } catch (e) {
         // Page might have been closed already
