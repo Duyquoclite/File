@@ -362,7 +362,6 @@ function copyFolderRecursive(source, target) {
       file === 'node_modules' ||
       file === 'key.txt' ||
       file === 'shortcuts' ||
-      file === 'extensions' ||
       file === 'docs' ||
       file === 'chrome' ||
       file.startsWith('db.sqlite')
