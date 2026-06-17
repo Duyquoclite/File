@@ -2,16 +2,22 @@ const axios = require('axios');
 const db = require('../db');
 
 function getProxyUrl(proxy, proxyType) {
-  let proxyUrl = proxy;
-  const parts = proxyUrl.split(':');
-  if (parts.length === 4 && !proxyUrl.includes('://')) {
+  let proxyStr = proxy.trim();
+  let scheme = proxyType || 'http';
+  
+  if (proxyStr.includes('://')) {
+    const parts = proxyStr.split('://');
+    scheme = parts[0];
+    proxyStr = parts[1];
+  }
+  
+  const parts = proxyStr.split(':');
+  if (parts.length === 4) {
     const [host, port, user, pass] = parts;
-    proxyUrl = `${user}:${pass}@${host}:${port}`;
+    proxyStr = `${user}:${pass}@${host}:${port}`;
   }
-  if (!proxyUrl.includes('://')) {
-    proxyUrl = `${proxyType}://${proxyUrl}`;
-  }
-  return proxyUrl;
+  
+  return `${scheme}://${proxyStr}`;
 }
 
 async function fetchRawIp(proxy, proxyType) {
@@ -156,7 +162,7 @@ async function checkProxiesJob() {
         `).run(category, lastIp, unchangedChecks, lastIp, profile.id);
 
       } catch (err) {
-        // Ignored, proxy could be temporarily offline
+        console.warn(`[ProxyChecker] Failed to check proxy for profile "${profile.name}":`, err.message);
       }
     }
   } catch (error) {
