@@ -49,6 +49,35 @@ function cleanupStaleProfileLock(userDataDir) {
  * Find Chrome executable on Windows
  */
 function findChromeExecutable() {
+  // 1. Prioritize Chrome for Testing installed in the project root
+  const cftDir = path.join(__dirname, '..', '..', 'chrome');
+  if (fs.existsSync(cftDir)) {
+    try {
+      const findExe = (dir) => {
+        const items = fs.readdirSync(dir);
+        for (const item of items) {
+          const fullPath = path.join(dir, item);
+          const stat = fs.statSync(fullPath);
+          if (stat.isDirectory()) {
+            const found = findExe(fullPath);
+            if (found) return found;
+          } else if (item.toLowerCase() === 'chrome.exe') {
+            return fullPath;
+          }
+        }
+        return null;
+      };
+      const cftPath = findExe(cftDir);
+      if (cftPath) {
+        console.log(`[Chrome] Using Chrome for Testing found in project: ${cftPath}`);
+        return cftPath;
+      }
+    } catch (e) {
+      console.warn('[Chrome] Failed to search Chrome for Testing directory:', e.message);
+    }
+  }
+
+  // 2. Fallback to standard system paths
   const possiblePaths = [
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
@@ -60,6 +89,164 @@ function findChromeExecutable() {
   // Fallback: let puppeteer try to find it
   return undefined;
 }
+
+
+
+
+/**
+ * Remove the obsolete bookmark from Chrome's Bookmarks file.
+ * @param {string} userDataDir
+ */
+function removeProfileBookmarks(userDataDir) {
+  try {
+    const bookmarksPath = path.join(userDataDir, 'Default', 'Bookmarks');
+    if (fs.existsSync(bookmarksPath)) {
+      const content = fs.readFileSync(bookmarksPath, 'utf8');
+      const bookmarks = JSON.parse(content);
+      if (bookmarks.roots && bookmarks.roots.bookmark_bar && bookmarks.roots.bookmark_bar.children) {
+        const initialLen = bookmarks.roots.bookmark_bar.children.length;
+        bookmarks.roots.bookmark_bar.children = bookmarks.roots.bookmark_bar.children.filter(
+          child => child.name !== "🏠 Thông tin Profile"
+        );
+        if (bookmarks.roots.bookmark_bar.children.length !== initialLen) {
+          fs.writeFileSync(bookmarksPath, JSON.stringify(bookmarks, null, 2), 'utf8');
+        }
+      }
+    }
+  } catch (e) {
+    // Ignore
+  }
+}
+
+/**
+ * Create a profile-specific Chrome extension that opens the profile info page.
+ * @param {string} userDataDir
+ * @param {string} profileId
+ * @returns {string} Path to the created extension directory
+ */
+function createProfileInfoExtension(userDataDir, profileId) {
+  try {
+    const extDir = path.join(userDataDir, 'profile-info-extension');
+    if (!fs.existsSync(extDir)) {
+      fs.mkdirSync(extDir, { recursive: true });
+    }
+
+    const manifest = {
+      manifest_version: 3,
+      name: "Thông tin Profile",
+      version: "1.0",
+      description: "Hiển thị thông tin cấu hình, proxy và vân tay của profile này.",
+      key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz8R/CXzdGNtXzZPX4YClooPcU1/I5FRqCQi0usmHGznk6vtnXvLSCoSYAdXu2u7y4HLDaN657J3L91mjp3gGP+A7e7aPJgEgmIg+rI9TFlGb6IuaGMi6ogir8Ewd/4SD/RFaoi11JE8ect44SKRVKX6v00WNnA+RdxSf+ISSY2coycXFrAkGMjWVQp3VXxNjwyM3BBgSBvg/CIKzUFw4NiOB11Ore6NmkeudQh/APdnf0s0itMALFoXFSlLMc7N4qi4wUSezHdXFFsxHcoOqa+8HmPK46Ia42uFr3374TksozX+89E4YXcK3H4H9IVZvBj3EvJ25GMndYribUqUxIQIDAQAB",
+      action: {
+        default_title: "Xem thông tin Profile"
+      },
+      background: {
+        service_worker: "background.js"
+      },
+      permissions: ["tabs"]
+    };
+
+    fs.writeFileSync(path.join(extDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+
+    const backgroundJs = `chrome.action.onClicked.addListener((tab) => {
+  chrome.tabs.create({
+    url: "http://localhost:3000/profile-info/${profileId}"
+  });
+});`;
+
+    fs.writeFileSync(path.join(extDir, 'background.js'), backgroundJs, 'utf8');
+
+    return extDir;
+  } catch (err) {
+    console.error('[Chrome] Error creating profile info extension:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Update the profile display name in Chrome's Preferences and Local State files.
+ * @param {string} userDataDir - Path to profile user data directory
+ * @param {string} profileName - Display name of the profile
+ */
+function updateProfileNameInPrefs(userDataDir, profileName) {
+  if (!profileName) return;
+
+  const localStatePath = path.join(userDataDir, 'Local State');
+  const preferencesPath = path.join(userDataDir, 'Default', 'Preferences');
+
+  // 1. Update Local State (caches the profile names for the profile manager UI)
+  try {
+    let localState = {};
+    if (fs.existsSync(localStatePath)) {
+      const content = fs.readFileSync(localStatePath, 'utf8');
+      try {
+        localState = JSON.parse(content);
+      } catch (e) {
+        console.warn('[Chrome] Failed to parse existing Local State, rewriting:', e.message);
+      }
+    }
+
+    if (!localState.profile) localState.profile = {};
+    if (!localState.profile.info_cache) localState.profile.info_cache = {};
+    if (!localState.profile.info_cache.Default) localState.profile.info_cache.Default = {};
+
+    localState.profile.info_cache.Default.name = profileName;
+    localState.profile.info_cache.Default.is_using_default_name = false;
+
+    fs.writeFileSync(localStatePath, JSON.stringify(localState, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[Chrome] Error updating Local State:', err.message);
+  }
+
+  // 2. Update Default/Preferences (stores profile-specific preferences)
+  try {
+    const defaultDir = path.join(userDataDir, 'Default');
+    if (!fs.existsSync(defaultDir)) {
+      fs.mkdirSync(defaultDir, { recursive: true });
+    }
+
+    let preferences = {};
+    if (fs.existsSync(preferencesPath)) {
+      const content = fs.readFileSync(preferencesPath, 'utf8');
+      try {
+        preferences = JSON.parse(content);
+      } catch (e) {
+        console.warn('[Chrome] Failed to parse existing Preferences, rewriting:', e.message);
+      }
+    }
+
+    if (!preferences.profile) preferences.profile = {};
+    preferences.profile.name = profileName;
+
+    // Remove obsolete Home button & Bookmark bar preferences
+    if (preferences.browser) {
+      delete preferences.browser.show_home_button;
+    }
+    delete preferences.homepage;
+    delete preferences.homepage_is_newtabpage;
+    if (preferences.bookmark_bar) {
+      delete preferences.bookmark_bar.show_on_all_tabs;
+    }
+
+    // Pin the profile-info extension to the toolbar
+    if (!preferences.extensions) preferences.extensions = {};
+    if (!Array.isArray(preferences.extensions.pinned_extensions)) {
+      preferences.extensions.pinned_extensions = [];
+    }
+    const extId = "hddocagbfcdibehfcnafddbehcfhmegn";
+    if (!preferences.extensions.pinned_extensions.includes(extId)) {
+      preferences.extensions.pinned_extensions.push(extId);
+    }
+
+    fs.writeFileSync(preferencesPath, JSON.stringify(preferences, null, 2), 'utf8');
+
+    // Clean up obsolete bookmark if exists
+    removeProfileBookmarks(userDataDir);
+  } catch (err) {
+    console.error('[Chrome] Error updating Preferences:', err.message);
+  }
+}
+
 
 
 
@@ -77,6 +264,7 @@ async function launchProfile(profile) {
   if (!fs.existsSync(userDataDir)) fs.mkdirSync(userDataDir, { recursive: true });
 
   cleanupStaleProfileLock(userDataDir);
+  updateProfileNameInPrefs(userDataDir, profile.name);
   const fingerprint = JSON.parse(profile.fingerprint || '{}');
 
   // Parse proxy info first
@@ -172,6 +360,13 @@ async function launchProfile(profile) {
       console.warn('Failed to read extensions directory:', e.message);
     }
   }
+
+  // Load the profile-specific profile-info extension
+  const profileInfoExtPath = createProfileInfoExtension(userDataDir, profile.id);
+  if (profileInfoExtPath) {
+    extPaths.push(profileInfoExtPath);
+  }
+
   if (extPaths.length > 0) {
     const formattedPaths = extPaths.map(p => path.resolve(p).replace(/\\/g, '/'));
     args.push(`--load-extension=${formattedPaths.join(',')}`);
@@ -249,6 +444,10 @@ async function launchProfile(profile) {
           closedBlank = true;
         } else {
           await setupPage(page);
+          if (url === 'about:blank' || url === 'chrome://newtab/') {
+            // Redirect the initial blank page to google.com
+            await page.goto('https://google.com').catch(() => {});
+          }
         }
       } catch (e) {
         // Ignore
