@@ -35,6 +35,7 @@ function getAllFiles(dirPath, arrayOfFiles = {}) {
       file === 'shortcuts' ||
       file === 'extensions' ||
       file === 'docs' ||
+      file === 'chrome' ||
       file.startsWith('db.sqlite')
     ) {
       return;
@@ -363,6 +364,7 @@ function copyFolderRecursive(source, target) {
       file === 'shortcuts' ||
       file === 'extensions' ||
       file === 'docs' ||
+      file === 'chrome' ||
       file.startsWith('db.sqlite')
     ) {
       return;
