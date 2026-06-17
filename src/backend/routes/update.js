@@ -33,6 +33,8 @@ function getAllFiles(dirPath, arrayOfFiles = {}) {
       file === '.git' ||
       file === 'key.txt' ||
       file === 'shortcuts' ||
+      file === 'extensions' ||
+      file === 'docs' ||
       file.startsWith('db.sqlite')
     ) {
       return;
@@ -359,6 +361,8 @@ function copyFolderRecursive(source, target) {
       file === 'node_modules' ||
       file === 'key.txt' ||
       file === 'shortcuts' ||
+      file === 'extensions' ||
+      file === 'docs' ||
       file.startsWith('db.sqlite')
     ) {
       return;
