@@ -207,7 +207,16 @@ if (_confirmModalEl) {
   if (okBtn) okBtn.onclick = () => closeConfirmModal(true);
   if (cancelBtn) cancelBtn.onclick = () => closeConfirmModal(false);
   if (closeBtn) closeBtn.onclick = () => closeConfirmModal(false);
-  _confirmModalEl.onclick = function (e) { if (e.target === this) closeConfirmModal(false); };
+  
+  let confirmMousedownTarget = null;
+  _confirmModalEl.addEventListener('mousedown', (e) => {
+    confirmMousedownTarget = e.target;
+  });
+  _confirmModalEl.addEventListener('click', (e) => {
+    if (e.target === _confirmModalEl && confirmMousedownTarget === _confirmModalEl) {
+      closeConfirmModal(false);
+    }
+  });
 }
 const _messageModalEl = document.getElementById('messageModal');
 if (_messageModalEl) {
@@ -215,7 +224,16 @@ if (_messageModalEl) {
   const closeBtn = document.getElementById('messageModalClose');
   if (okBtn) okBtn.onclick = () => closeModal('messageModal');
   if (closeBtn) closeBtn.onclick = () => closeModal('messageModal');
-  _messageModalEl.onclick = function (e) { if (e.target === this) closeModal('messageModal'); };
+  
+  let messageMousedownTarget = null;
+  _messageModalEl.addEventListener('mousedown', (e) => {
+    messageMousedownTarget = e.target;
+  });
+  _messageModalEl.addEventListener('click', (e) => {
+    if (e.target === _messageModalEl && messageMousedownTarget === _messageModalEl) {
+      closeModal('messageModal');
+    }
+  });
 }
 // ====== Load Profiles ======
 async function loadProfiles(search = '') {
@@ -1313,7 +1331,17 @@ document.getElementById('searchInput').oninput = function () {
 
 // ====== Close modals on overlay click ======
 document.querySelectorAll('.modal-overlay').forEach(el => {
-  el.onclick = function (e) { if (e.target === this) this.classList.remove('active'); };
+  if (el.id === 'confirmModal' || el.id === 'messageModal') return;
+
+  let mousedownTarget = null;
+  el.addEventListener('mousedown', (e) => {
+    mousedownTarget = e.target;
+  });
+  el.addEventListener('click', (e) => {
+    if (e.target === el && mousedownTarget === el) {
+      el.classList.remove('active');
+    }
+  });
 });
 
 // ====== Auto-resolve duplicate dynamic proxy IPs ======
