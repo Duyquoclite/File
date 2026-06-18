@@ -312,7 +312,6 @@ const GPU_CONFIGS = [
 
 const GPU_ARCHITECTURES = ['x86_64', 'arm64', 'x86', 'unknown'];
 
-const HARDWARE_CONCURRENCY = [2,4,6,8,8,12,12,16,16,20,24,32];
 const DEVICE_MEMORY = [4,6,8,8,12,16,16,32];
 const MAX_TOUCH_POINTS = [0,1,5,10];
 
