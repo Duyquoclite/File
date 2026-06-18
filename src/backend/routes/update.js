@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const axios = require('axios');
+const crypto = require('crypto');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
@@ -29,10 +30,8 @@ function getAllFiles(dirPath, arrayOfFiles = {}) {
       file === 'node_modules' ||
       file === 'profiles' ||
       file === 'data' ||
-      file === 'shares' ||
       file === '.git' ||
       file === 'key.txt' ||
-      file === 'shortcuts' ||
       file === 'docs' ||
       file === 'chrome' ||
       file.startsWith('db.sqlite')
@@ -53,6 +52,13 @@ function getAllFiles(dirPath, arrayOfFiles = {}) {
     }
   });
   return arrayOfFiles;
+}
+
+// Calculate the Git blob SHA-1 of a local file buffer
+function gitBlobSha(buffer) {
+  const header = `blob ${buffer.length}\0`;
+  const store = Buffer.concat([Buffer.from(header), buffer]);
+  return crypto.createHash('sha1').update(store).digest('hex');
 }
 
 // Check local status (whether the developer key/token exists)
@@ -281,6 +287,20 @@ router.post('/github-push', async (req, res) => {
       const githubPath = `src/${relativePath}`.replace(/\\/g, '/');
       const base64Content = fileBuffer.toString('base64');
       const existingSha = fileShaMap[githubPath];
+
+      // If file has not changed, skip upload
+      const localSha = gitBlobSha(fileBuffer);
+      if (existingSha && localSha === existingSha) {
+        broadcastProgress({
+          status: 'skipped',
+          currentFile: relativePath,
+          current: currentCount,
+          total: totalFiles,
+          percent: percent,
+          message: `Không đổi (bỏ qua): ${relativePath}`
+        });
+        continue;
+      }
 
       broadcastProgress({
         status: 'uploading',
