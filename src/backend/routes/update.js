@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { exec, spawn } = require('child_process');
+const { spawn } = require('child_process');
 const axios = require('axios');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
@@ -33,7 +33,6 @@ function getAllFiles(dirPath, arrayOfFiles = {}) {
       file === '.git' ||
       file === 'key.txt' ||
       file === 'shortcuts' ||
-      file === 'extensions' ||
       file === 'docs' ||
       file === 'chrome' ||
       file.startsWith('db.sqlite')
@@ -347,39 +346,4 @@ router.post('/github-push', async (req, res) => {
     res.status(500).json({ success: false, error: 'Lỗi đẩy mã nguồn lên GitHub: ' + error.message });
   }
 });
-
-function copyFolderRecursive(source, target) {
-  const files = fs.readdirSync(source);
-  files.forEach(file => {
-    const curSource = path.join(source, file);
-    const curTarget = path.join(target, file);
-
-    // Exclude folders/files
-    if (
-      file === 'profiles' ||
-      file === 'data' ||
-      file === 'shares' ||
-      file === 'node_modules' ||
-      file === 'key.txt' ||
-      file === 'shortcuts' ||
-      file === 'docs' ||
-      file === 'chrome' ||
-      file.startsWith('db.sqlite')
-    ) {
-      return;
-    }
-
-    const stat = fs.statSync(curSource);
-    if (stat.isDirectory()) {
-      if (!fs.existsSync(curTarget)) {
-        fs.mkdirSync(curTarget, { recursive: true });
-      }
-      copyFolderRecursive(curSource, curTarget);
-    } else {
-      fs.mkdirSync(path.dirname(curTarget), { recursive: true });
-      fs.copyFileSync(curSource, curTarget);
-    }
-  });
-}
-
 module.exports = router;
