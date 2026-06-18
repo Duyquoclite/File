@@ -7,7 +7,6 @@
 
 const path = require('path');
 const fs = require('fs');
-const { execFile } = require('child_process');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const { buildFingerprintScript } = require('./fingerprintService');
@@ -511,50 +510,6 @@ async function closeProfile(profileId) {
   }
 }
 
-/**
- * Run a raw JS automation script on a running profile.
- * @param {string} profileId
- * @param {string} scriptCode - raw JavaScript code
- * @param {Function} onLog - callback for log messages
- * @returns {Object} { success, result, error }
- */
-async function runScript(profileId, scriptCode, onLog = () => {}) {
-  const entry = runningBrowsers.get(profileId);
-  if (!entry) {
-    return { success: false, error: 'Profile is not running. Open it first.' };
-  }
-
-  try {
-    const pages = await entry.browser.pages();
-    let page = pages[pages.length - 1]; // use the last active page
-
-    if (!page) {
-      page = await entry.browser.newPage();
-    }
-
-    // Intercept console messages
-    const logHandler = (msg) => {
-      onLog({ type: msg.type(), text: msg.text() });
-    };
-    page.on('console', logHandler);
-
-    // Build an async function wrapper
-    const wrappedCode = `
-      (async () => {
-        ${scriptCode}
-      })()
-    `;
-
-    // Execute the script
-    const result = await page.evaluate(wrappedCode);
-
-    page.off('console', logHandler);
-
-    return { success: true, result: result };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
 
 /**
  * Run a Puppeteer-level automation script (has access to page object).
@@ -644,7 +599,6 @@ async function closeAll() {
 module.exports = {
   launchProfile,
   closeProfile,
-  runScript,
   runPuppeteerScript,
   getRunningProfiles,
   isRunning,
