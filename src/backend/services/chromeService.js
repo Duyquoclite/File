@@ -535,7 +535,18 @@ async function runPuppeteerScript(profileId, scriptCode, onLog = () => {}) {
 
     // Intercept console messages
     const logHandler = (msg) => {
-      onLog({ type: 'console', text: msg.text() });
+      const text = msg.text();
+      const lowerText = text.toLowerCase();
+      // Filter out noisy Canvas2D warnings to keep console output clean
+      if (
+        lowerText.includes('canvas2d') || 
+        lowerText.includes('willreadfrequently') || 
+        lowerText.includes('getimagedata') || 
+        lowerText.includes('will-read-frequently')
+      ) {
+        return;
+      }
+      onLog({ type: 'console', text });
     };
     page.on('console', logHandler);
 
@@ -547,14 +558,14 @@ async function runPuppeteerScript(profileId, scriptCode, onLog = () => {}) {
       info: (...args) => onLog({ type: 'info', text: args.map(String).join(' ') }),
     };
 
-    // Build function with page and browser context
-    const asyncFn = new Function('page', 'browser', 'console', `
+    // Build function with page, browser, console and require context
+    const asyncFn = new Function('page', 'browser', 'console', 'require', `
       return (async () => {
         ${scriptCode}
       })();
     `);
 
-    const result = await asyncFn(page, browser, scriptConsole);
+    const result = await asyncFn(page, browser, scriptConsole, require);
     page.off('console', logHandler);
 
     return { success: true, result: result !== undefined ? String(result) : null };
