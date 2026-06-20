@@ -7,6 +7,7 @@ let selectedIds = new Set();
 let currentScriptProfileId = null;
 let currentFingerprintDraft = null;
 let ws = null;
+const launchingProfileIds = new Set();
 const hiddenGroups = new Set(JSON.parse(localStorage.getItem('hiddenGroups') || '[]'));
 let layoutMode = localStorage.getItem('layoutMode') || 'column';
 const clientId = 'client_' + Math.random().toString(36).substring(2, 15);
@@ -383,15 +384,27 @@ function renderProfiles() {
             ${p.notes ? `<span class="meta-tag notes">📝 ${esc(p.notes.substring(0, 20))}</span>` : ''}
           </div>
           <div class="card-actions">
-            ${p.isRunning
-          ? `<button class="btn btn-warning btn-sm" onclick="closeProfile('${p.id}')">⏹ Đóng</button>`
-          : `<button class="btn btn-success btn-sm" onclick="openProfile('${p.id}')">▶ Mở</button>`
-        }
-            <button class="btn-icon" onclick="duplicateProfile('${p.id}')" title="Nhân bản">Nhân bản</button>
-            <button class="btn-icon" onclick="showDetail('${p.id}')" title="Chi tiết">Chi tiết</button>
-            <button class="btn-icon" onclick="openScriptEditor('${p.id}')" title="Automation">Dán script tự động</button>
-            <button class="btn-icon" onclick="regenFingerprint('${p.id}')" title="Tạo lại fingerprint">Tạo lại vân tay</button>
-            <button class="btn-icon" onclick="deleteProfile('${p.id}')" title="Xóa" style="color:var(--danger)">Xóa</button>
+            ${launchingProfileIds.has(p.id)
+              ? `
+                <button class="btn btn-success btn-sm" disabled style="opacity: 0.7; cursor: not-allowed;">⏳ Đang mở...</button>
+                <button class="btn-icon" disabled style="opacity: 0.5; cursor: not-allowed;">Nhân bản</button>
+                <button class="btn-icon" disabled style="opacity: 0.5; cursor: not-allowed;">Chi tiết</button>
+                <button class="btn-icon" disabled style="opacity: 0.5; cursor: not-allowed;">Dán script tự động</button>
+                <button class="btn-icon" disabled style="opacity: 0.5; cursor: not-allowed;">Tạo lại vân tay</button>
+                <button class="btn-icon" disabled style="opacity: 0.5; cursor: not-allowed; color:var(--danger)">Xóa</button>
+              `
+              : `
+                ${p.isRunning
+                  ? `<button class="btn btn-warning btn-sm" onclick="closeProfile('${p.id}')">⏹ Đóng</button>`
+                  : `<button class="btn btn-success btn-sm" onclick="openProfile('${p.id}')">▶ Mở</button>`
+                }
+                <button class="btn-icon" onclick="duplicateProfile('${p.id}')" title="Nhân bản">Nhân bản</button>
+                <button class="btn-icon" onclick="showDetail('${p.id}')" title="Chi tiết">Chi tiết</button>
+                <button class="btn-icon" onclick="openScriptEditor('${p.id}')" title="Automation">Dán script tự động</button>
+                <button class="btn-icon" onclick="regenFingerprint('${p.id}')" title="Tạo lại fingerprint">Tạo lại vân tay</button>
+                <button class="btn-icon" onclick="deleteProfile('${p.id}')" title="Xóa" style="color:var(--danger)">Xóa</button>
+              `
+            }
           </div>
         </div>
       `;
@@ -534,10 +547,24 @@ async function duplicateProfile(id) {
 }
 
 async function openProfile(id) {
+  if (launchingProfileIds.has(id)) return;
+  launchingProfileIds.add(id);
   toast('Đang mở Chrome...', 'info');
-  const res = await api(`/profiles/${id}/open`, { method: 'POST' });
-  if (res.success) { toast('Chrome đã mở!', 'success'); loadProfiles(); }
-  else toast(res.error || 'Lỗi', 'error');
+  renderProfiles(); // Re-render to show loading status and disable buttons
+
+  try {
+    const res = await api(`/profiles/${id}/open`, { method: 'POST' });
+    if (res.success) {
+      toast('Chrome đã mở!', 'success');
+    } else {
+      toast(res.error || 'Lỗi mở Chrome', 'error');
+    }
+  } catch (err) {
+    toast(err.message || 'Lỗi kết nối để mở Chrome', 'error');
+  } finally {
+    launchingProfileIds.delete(id);
+    loadProfiles(); // Re-fetch and re-render with final state
+  }
 }
 
 async function closeProfile(id) {
@@ -1182,6 +1209,15 @@ function openScriptEditor(id) {
 }
 document.getElementById('btnCloseScript').onclick = () => closeModal('scriptModal');
 
+document.getElementById('btnCopyLogs').onclick = () => {
+  const logText = document.getElementById('logOutput').innerText;
+  navigator.clipboard.writeText(logText).then(() => {
+    toast('Đã copy logs vào clipboard!', 'success');
+  }).catch(() => {
+    toast('Lỗi copy logs!', 'error');
+  });
+};
+
 document.getElementById('btnSaveScript').onclick = async () => {
   const name = document.getElementById('scriptName').value.trim() || 'Untitled';
   const code = document.getElementById('scriptCode').value;
@@ -1532,6 +1568,18 @@ if (btnBulkRunScript) {
 if (btnCloseBulkScript) btnCloseBulkScript.onclick = () => closeModal('bulkScriptModal');
 if (btnCancelBulkScript) btnCancelBulkScript.onclick = () => closeModal('bulkScriptModal');
 
+const btnCopyBulkLogs = document.getElementById('btnCopyBulkLogs');
+if (btnCopyBulkLogs) {
+  btnCopyBulkLogs.onclick = () => {
+    const logText = document.getElementById('bulkLogOutput').innerText;
+    navigator.clipboard.writeText(logText).then(() => {
+      toast('Đã copy logs vào clipboard!', 'success');
+    }).catch(() => {
+      toast('Lỗi copy logs!', 'error');
+    });
+  };
+}
+
 if (btnRunBulkScript) {
   btnRunBulkScript.onclick = async () => {
     const code = bulkScriptCode.value.trim();
@@ -1856,3 +1904,14 @@ loadProfiles();
 
   applyLayoutMode();
   connectWS();
+
+  // ====== Theme Toggle ======
+  const btnThemeToggle = document.getElementById('btnThemeToggle');
+  if (btnThemeToggle) {
+    btnThemeToggle.onclick = () => {
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+    };
+  }
