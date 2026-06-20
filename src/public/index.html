@@ -2,6 +2,12 @@
 <html lang="vi">
 
 <head>
+  <script>
+    (function() {
+      const theme = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>quất chrome</title>
@@ -16,9 +22,7 @@
 </head>
 
 <body>
-  <!-- Auth Overlay removed – authentication now handled on a separate page (login.html) -->
   <script>
-    // Check both localStorage and cookie for auth token
     const icons = [
       "1.png",
       "2.png",
@@ -38,10 +42,6 @@
         favicon.href = icons[newIndex] + "?v=" + Date.now(); // ép reload, tránh cache
       }
     }, 5000);
-    function _getCookie(name) {
-      const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-      return match ? match[2] : null;
-    }
   </script>
 
   <!-- ====== Header ====== -->
@@ -77,7 +77,22 @@
           <span class="stat-label">Running</span>
         </div>
       </div>
-      <button id="btnLogout" class="btn btn-ghost" style="padding: 8px 16px; display: none;">Đăng xuất</button>
+      <button id="btnThemeToggle" class="btn btn-icon" title="Đổi giao diện Sáng/Tối" style="padding: 8px; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+        <svg class="theme-icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <svg class="theme-icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
     </div>
   </header>
 
@@ -400,7 +415,10 @@ await page.screenshot({ path: 'screenshot.png' });</code></pre>
             spellcheck="false"></textarea>
         </div>
         <div class="script-logs" id="scriptLogs" style="display:none;">
-          <h4>📋 Console Output</h4>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h4 style="margin: 0;">📋 Console Output</h4>
+            <button class="btn btn-secondary btn-sm" id="btnCopyLogs" type="button" style="padding: 4px 8px; font-size: 0.8rem; height: auto;">📋 Copy Logs</button>
+          </div>
           <div class="log-output" id="logOutput"></div>
         </div>
       </div>
@@ -463,7 +481,10 @@ await page.screenshot({ path: 'screenshot.png' });</code></pre>
           <textarea id="bulkScriptCode" class="code-editor" rows="15" placeholder="// Viết script chạy cho tất cả profiles đã chọn..." spellcheck="false"></textarea>
         </div>
         <div class="script-logs" id="bulkScriptLogs" style="display:none;">
-          <h4>📋 Trạng thái chạy hàng loạt</h4>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h4 style="margin: 0;">📋 Trạng thái chạy hàng loạt</h4>
+            <button class="btn btn-secondary btn-sm" id="btnCopyBulkLogs" type="button" style="padding: 4px 8px; font-size: 0.8rem; height: auto;">📋 Copy Logs</button>
+          </div>
           <div class="log-output" id="bulkLogOutput" style="max-height: 250px; overflow-y: auto;"></div>
         </div>
       </div>
