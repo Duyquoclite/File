@@ -117,10 +117,10 @@ function generateLanguagesList() {
 const LANGUAGES = generateLanguagesList();
 
 const SCREEN_RESOLUTIONS = [
-    {w:1920,h:1080}, {w:1366,h:768}, {w:1536,h:864}, {w:1440,h:900},
-    {w:1280,h:720}, {w:2560,h:1440}, {w:1600,h:900}, {w:1680,h:1050},
-    {w:3440,h:1440}, {w:3840,h:2160}, {w:1920,h:1200}, {w:1280,h:800},
-    {w:2560,h:1080}, {w:1366,h:1024}, {w:1600,h:1200}, {w:2048,h:1152},
+    { w: 1920, h: 1080 }, { w: 1366, h: 768 }, { w: 1536, h: 864 }, { w: 1440, h: 900 },
+    { w: 1280, h: 720 }, { w: 2560, h: 1440 }, { w: 1600, h: 900 }, { w: 1680, h: 1050 },
+    { w: 3440, h: 1440 }, { w: 3840, h: 2160 }, { w: 1920, h: 1200 }, { w: 1280, h: 800 },
+    { w: 2560, h: 1080 }, { w: 1366, h: 1024 }, { w: 1600, h: 1200 }, { w: 2048, h: 1152 },
 ];
 
 const FONT_FAMILIES = [
@@ -133,187 +133,187 @@ const FONT_FAMILIES = [
 ];
 
 const GPU_CONFIGS = [
-  // Intel
-  {
-    vendor: 'Intel Inc.',
-    webglVendor: 'Google Inc. (Intel)',
-    gpuName: 'Intel(R) UHD Graphics 770',
-    webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 770, OpenGL 4.5)'
-  },
-  {
-    vendor: 'Intel Inc.',
-    webglVendor: 'Google Inc. (Intel)',
-    gpuName: 'Intel(R) UHD Graphics 750',
-    webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 750, OpenGL 4.5)'
-  },
-  {
-    vendor: 'Intel Inc.',
-    webglVendor: 'Google Inc. (Intel)',
-    gpuName: 'Intel(R) UHD Graphics 730',
-    webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 730, OpenGL 4.5)'
-  },
-  {
-    vendor: 'Intel Inc.',
-    webglVendor: 'Google Inc. (Intel)',
-    gpuName: 'Intel(R) UHD Graphics 630',
-    webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 630, OpenGL 4.5)'
-  },
-  {
-    vendor: 'Intel Inc.',
-    webglVendor: 'Google Inc. (Intel)',
-    gpuName: 'Intel(R) UHD Graphics 620',
-    webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 620, OpenGL 4.5)'
-  },
-  {
-    vendor: 'Intel Inc.',
-    webglVendor: 'Google Inc. (Intel)',
-    gpuName: 'Intel(R) Iris(R) Xe Graphics',
-    webglRenderer: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics, OpenGL 4.5)'
-  },
-  {
-    vendor: 'Intel Inc.',
-    webglVendor: 'Google Inc. (Intel)',
-    gpuName: 'Intel(R) Iris(R) Plus Graphics',
-    webglRenderer: 'ANGLE (Intel, Intel(R) Iris(R) Plus Graphics, OpenGL 4.5)'
-  },
-  
-  // NVIDIA
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce RTX 4090',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce RTX 4080',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce RTX 4070 Ti',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce RTX 4060 Ti',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce RTX 4060',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce RTX 3080',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce RTX 3070',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce RTX 3060 Ti',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce RTX 3060',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce RTX 3050',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce RTX 2060',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce GTX 1660 Super',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Super Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    webglVendor: 'Google Inc. (NVIDIA)',
-    gpuName: 'NVIDIA GeForce GTX 1650',
-    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
+    // Intel
+    {
+        vendor: 'Intel Inc.',
+        webglVendor: 'Google Inc. (Intel)',
+        gpuName: 'Intel(R) UHD Graphics 770',
+        webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 770, OpenGL 4.5)'
+    },
+    {
+        vendor: 'Intel Inc.',
+        webglVendor: 'Google Inc. (Intel)',
+        gpuName: 'Intel(R) UHD Graphics 750',
+        webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 750, OpenGL 4.5)'
+    },
+    {
+        vendor: 'Intel Inc.',
+        webglVendor: 'Google Inc. (Intel)',
+        gpuName: 'Intel(R) UHD Graphics 730',
+        webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 730, OpenGL 4.5)'
+    },
+    {
+        vendor: 'Intel Inc.',
+        webglVendor: 'Google Inc. (Intel)',
+        gpuName: 'Intel(R) UHD Graphics 630',
+        webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 630, OpenGL 4.5)'
+    },
+    {
+        vendor: 'Intel Inc.',
+        webglVendor: 'Google Inc. (Intel)',
+        gpuName: 'Intel(R) UHD Graphics 620',
+        webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 620, OpenGL 4.5)'
+    },
+    {
+        vendor: 'Intel Inc.',
+        webglVendor: 'Google Inc. (Intel)',
+        gpuName: 'Intel(R) Iris(R) Xe Graphics',
+        webglRenderer: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics, OpenGL 4.5)'
+    },
+    {
+        vendor: 'Intel Inc.',
+        webglVendor: 'Google Inc. (Intel)',
+        gpuName: 'Intel(R) Iris(R) Plus Graphics',
+        webglRenderer: 'ANGLE (Intel, Intel(R) Iris(R) Plus Graphics, OpenGL 4.5)'
+    },
 
-  // AMD
-  {
-    vendor: 'AMD Corporation',
-    webglVendor: 'Google Inc. (AMD)',
-    gpuName: 'AMD Radeon RX 7900 XTX',
-    webglRenderer: 'ANGLE (AMD, AMD Radeon RX 7900 XTX Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'AMD Corporation',
-    webglVendor: 'Google Inc. (AMD)',
-    gpuName: 'AMD Radeon RX 7800 XT',
-    webglRenderer: 'ANGLE (AMD, AMD Radeon RX 7800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'AMD Corporation',
-    webglVendor: 'Google Inc. (AMD)',
-    gpuName: 'AMD Radeon RX 6700 XT',
-    webglRenderer: 'ANGLE (AMD, AMD Radeon RX 6700 XT Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'AMD Corporation',
-    webglVendor: 'Google Inc. (AMD)',
-    gpuName: 'AMD Radeon RX 6600 XT',
-    webglRenderer: 'ANGLE (AMD, AMD Radeon RX 6600 XT Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
-  {
-    vendor: 'AMD Corporation',
-    webglVendor: 'Google Inc. (AMD)',
-    gpuName: 'AMD Radeon RX 580',
-    webglRenderer: 'ANGLE (AMD, AMD Radeon RX 580 Direct3D11 vs_5_0 ps_5_0, D3D11)'
-  },
+    // NVIDIA
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce RTX 4090',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce RTX 4080',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce RTX 4070 Ti',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce RTX 4060 Ti',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce RTX 4060',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce RTX 3080',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce RTX 3070',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce RTX 3060 Ti',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce RTX 3060',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce RTX 3050',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce RTX 2060',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce GTX 1660 Super',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Super Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'NVIDIA Corporation',
+        webglVendor: 'Google Inc. (NVIDIA)',
+        gpuName: 'NVIDIA GeForce GTX 1650',
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
 
-  // Apple
-  {
-    vendor: 'Apple Inc.',
-    webglVendor: 'Google Inc. (Apple)',
-    gpuName: 'Apple M3',
-    webglRenderer: 'ANGLE (Apple, Apple M3, OpenGL 4.1)'
-  },
-  {
-    vendor: 'Apple Inc.',
-    webglVendor: 'Google Inc. (Apple)',
-    gpuName: 'Apple M2',
-    webglRenderer: 'ANGLE (Apple, Apple M2, OpenGL 4.1)'
-  },
-  {
-    vendor: 'Apple Inc.',
-    webglVendor: 'Google Inc. (Apple)',
-    gpuName: 'Apple M1',
-    webglRenderer: 'ANGLE (Apple, Apple M1, OpenGL 4.1)'
-  }
+    // AMD
+    {
+        vendor: 'AMD Corporation',
+        webglVendor: 'Google Inc. (AMD)',
+        gpuName: 'AMD Radeon RX 7900 XTX',
+        webglRenderer: 'ANGLE (AMD, AMD Radeon RX 7900 XTX Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'AMD Corporation',
+        webglVendor: 'Google Inc. (AMD)',
+        gpuName: 'AMD Radeon RX 7800 XT',
+        webglRenderer: 'ANGLE (AMD, AMD Radeon RX 7800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'AMD Corporation',
+        webglVendor: 'Google Inc. (AMD)',
+        gpuName: 'AMD Radeon RX 6700 XT',
+        webglRenderer: 'ANGLE (AMD, AMD Radeon RX 6700 XT Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'AMD Corporation',
+        webglVendor: 'Google Inc. (AMD)',
+        gpuName: 'AMD Radeon RX 6600 XT',
+        webglRenderer: 'ANGLE (AMD, AMD Radeon RX 6600 XT Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+    {
+        vendor: 'AMD Corporation',
+        webglVendor: 'Google Inc. (AMD)',
+        gpuName: 'AMD Radeon RX 580',
+        webglRenderer: 'ANGLE (AMD, AMD Radeon RX 580 Direct3D11 vs_5_0 ps_5_0, D3D11)'
+    },
+
+    // Apple
+    {
+        vendor: 'Apple Inc.',
+        webglVendor: 'Google Inc. (Apple)',
+        gpuName: 'Apple M3',
+        webglRenderer: 'ANGLE (Apple, Apple M3, OpenGL 4.1)'
+    },
+    {
+        vendor: 'Apple Inc.',
+        webglVendor: 'Google Inc. (Apple)',
+        gpuName: 'Apple M2',
+        webglRenderer: 'ANGLE (Apple, Apple M2, OpenGL 4.1)'
+    },
+    {
+        vendor: 'Apple Inc.',
+        webglVendor: 'Google Inc. (Apple)',
+        gpuName: 'Apple M1',
+        webglRenderer: 'ANGLE (Apple, Apple M1, OpenGL 4.1)'
+    }
 ];
 
 const GPU_ARCHITECTURES = ['x86_64', 'arm64', 'x86', 'unknown'];
 
-const DEVICE_MEMORY = [4,6,8,8,12,16,16,32];
-const MAX_TOUCH_POINTS = [0,1,5,10];
+const DEVICE_MEMORY = [4, 6, 8, 8, 12, 16, 16, 32];
+const MAX_TOUCH_POINTS = [0, 1, 5, 10];
 
 function pick(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
@@ -365,12 +365,12 @@ function generateFingerprint() {
 
     return {
         userAgent: ua,
-        platform: isMac ? 'MacIntel' : 
-                  ua.includes('Linux') ? 'Linux x86_64' : 'Win32',
+        platform: isMac ? 'MacIntel' :
+            ua.includes('Linux') ? 'Linux x86_64' : 'Win32',
         vendor: 'Google Inc.',
         languages: languages,
         timezone: pick(TIMEZONES),
-        
+
         screen: {
             width: screen.w,
             height: screen.h,
@@ -423,6 +423,26 @@ function buildFingerprintScript(fp) {
 
     return `
         ;(() => {
+            const originalGetContext = HTMLCanvasElement.prototype.getContext;
+            HTMLCanvasElement.prototype.getContext = function(type, contextAttributes) {
+                if (type === '2d') {
+                    if (!contextAttributes) contextAttributes = {};
+                    contextAttributes.willReadFrequently = true;
+                }
+                return originalGetContext.call(this, type, contextAttributes);
+            };
+
+            if (window.OffscreenCanvas) {
+                const originalOffscreenGetContext = OffscreenCanvas.prototype.getContext;
+                OffscreenCanvas.prototype.getContext = function(type, contextAttributes) {
+                    if (type === '2d') {
+                        if (!contextAttributes) contextAttributes = {};
+                        contextAttributes.willReadFrequently = true;
+                    }
+                    return originalOffscreenGetContext.call(this, type, contextAttributes);
+                };
+            }
+
             const fakeNavigator = {
                 userAgent: ${JSON.stringify(fp.userAgent)},
                 platform: ${JSON.stringify(fp.platform)},
