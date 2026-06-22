@@ -1,0 +1,54 @@
+  <!-- ====== Update Modal ====== -->
+  <div class="modal-overlay" id="updateModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>🔄 Cập nhật hệ thống qua GitHub</h2>
+        <button class="btn-close" id="btnCloseUpdateModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Hidden inputs for JS compatibility -->
+        <div style="display:none;">
+          <input type="text" id="updateGithubRepo" value="Duyquoclite/File">
+          <input type="text" id="updateGithubBranch" value="main">
+        </div>
+
+        <div id="latestUpdateInfo" style="margin-bottom:16px; font-size:14px; line-height:1.5; color:var(--text-light);">
+          <span style="font-weight:500; color:var(--text-muted);">Bản cập nhật mới nhất trên GitHub:</span>
+          <div id="latestUpdateTime" style="font-weight:bold; color:var(--accent); font-size:15px; margin-top:4px;">Đang tải thông tin...</div>
+          <div id="latestCommitMsg" style="font-size:12px; color:var(--text-muted); margin-top:4px; font-style:italic; line-height:1.4;"></div>
+        </div>
+        <div id="uploadSection" style="display:none; margin-top:16px; border-top:1px dashed var(--border); padding-top:16px;">
+          <button class="btn btn-success" id="btnUploadUpdate" style="width:100%;">📤 Đẩy mã nguồn lên GitHub</button>
+        </div>
+        <div id="uploadProgressSection" style="display:none; margin-top:16px; border-top:1px dashed var(--border); padding-top:16px;">
+          <h4 style="margin-bottom:8px; font-size:13px; color:var(--text-light);">Tiến trình đẩy mã nguồn:</h4>
+          <!-- Progress bar -->
+          <div style="width:100%; background:var(--bg-card); border-radius:4px; height:18px; position:relative; overflow:hidden; border:1px solid var(--border); margin-bottom:8px;">
+            <div id="uploadProgressBar" style="width:0%; height:100%; background:var(--accent); transition:width 0.2s ease;"></div>
+            <span id="uploadProgressText" style="position:absolute; width:100%; text-align:center; top:0; left:0; font-size:11px; line-height:16px; font-weight:bold; color:var(--text-light);">0%</span>
+          </div>
+          <!-- Current file status -->
+          <div id="uploadProgressStatus" style="font-size:12px; font-weight:500; color:var(--text); margin-bottom:12px; word-break:break-all;">Đang chuẩn bị...</div>
+          <!-- Uploaded files log -->
+          <div id="uploadProgressLog" style="max-height:120px; overflow-y:auto; font-family:monospace; font-size:11px; background:var(--bg-card); padding:8px; border-radius:4px; border:1px solid var(--border); color:var(--success); line-height:1.4;"></div>
+        </div>
+
+        <div id="applyProgressSection" style="display:none; margin-top:16px; border-top:1px dashed var(--border); padding-top:16px;">
+          <h4 style="margin-bottom:8px; font-size:13px; color:var(--text-light);">Tiến trình tải & cài đặt:</h4>
+          <!-- Progress bar -->
+          <div style="width:100%; background:var(--bg-card); border-radius:4px; height:18px; position:relative; overflow:hidden; border:1px solid var(--border); margin-bottom:8px;">
+            <div id="applyProgressBar" style="width:0%; height:100%; background:var(--accent); transition:width 0.2s ease;"></div>
+            <span id="applyProgressText" style="position:absolute; width:100%; text-align:center; top:0; left:0; font-size:11px; line-height:16px; font-weight:bold; color:var(--text-light);">0%</span>
+          </div>
+          <!-- Current file status -->
+          <div id="applyProgressStatus" style="font-size:12px; font-weight:500; color:var(--text); margin-bottom:12px; word-break:break-all;">Đang chuẩn bị...</div>
+          <!-- Copied files log -->
+          <div id="applyProgressLog" style="max-height:120px; overflow-y:auto; font-family:monospace; font-size:11px; background:var(--bg-card); padding:8px; border-radius:4px; border:1px solid var(--border); color:var(--success); line-height:1.4;"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnCancelUpdate">Hủy</button>
+        <button class="btn btn-primary" id="btnConfirmUpdate">Cập nhật ngay</button>
+      </div>
+    </div>
+  </div>
