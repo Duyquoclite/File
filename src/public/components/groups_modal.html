@@ -1,0 +1,21 @@
+  <!-- ====== Manage Groups Modal ====== -->
+  <div class="modal-overlay" id="groupsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>👁️ Quản lý ẩn/hiện Nhóm Profile</h2>
+        <button class="btn-close" id="btnCloseGroupsModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px;">
+          Bỏ chọn các nhóm bạn muốn ẩn khỏi màn hình chính.
+        </p>
+        <div id="groupsListContainer" style="display:flex; flex-direction:column; gap:10px; max-height:300px; overflow-y:auto; padding-right:5px;">
+          <!-- Dynamic list of groups with checkboxes -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnSelectAllGroups">Hiện tất cả</button>
+        <button class="btn btn-primary" id="btnConfirmGroups">Đóng</button>
+      </div>
+    </div>
+  </div>
