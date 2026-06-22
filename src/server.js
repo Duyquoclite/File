@@ -30,6 +30,7 @@ app.use('/api/automation', require('./backend/routes/automation'));
 app.use('/api/proxy', require('./backend/routes/proxy'));
 app.use('/api/support', require('./backend/routes/support'));
 app.use('/api/update', require('./backend/routes/update'));
+app.use('/api/extensions', require('./backend/routes/extensions'));
 
 // ====== WebSocket for real-time logs ======
 const wss = new WebSocketServer({ server, path: '/ws' });
@@ -54,16 +55,17 @@ wss.on('connection', (ws) => {
           return;
         }
 
-        ws.send(JSON.stringify({ type: 'info', text: `▶ Running script on profile ${profileId}...` }));
+        ws.send(JSON.stringify({ type: 'info', profileId, text: `▶ Running script on profile ${profileId}...` }));
 
         const onLog = (log) => {
-          ws.send(JSON.stringify({ type: 'log', ...log }));
+          ws.send(JSON.stringify({ type: 'log', profileId, ...log }));
         };
 
         const result = await chromeService.runPuppeteerScript(profileId, code, onLog);
 
         ws.send(JSON.stringify({
           type: 'result',
+          profileId,
           success: result.success,
           result: result.result,
           error: result.error,
