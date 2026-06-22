@@ -1,0 +1,58 @@
+  <!-- ====== Script Editor Modal ====== -->
+  <div class="modal-overlay" id="scriptModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>🤖 Automation Script</h2>
+        <button class="btn-close" id="btnCloseScript">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="script-info">
+          <p>Viết JavaScript automation. Bạn có quyền truy cập <code>page</code> (Puppeteer Page) và
+            <code>browser</code>.
+          </p>
+          <details>
+            <summary>📖 Ví dụ script</summary>
+            <pre><code>// Mở trang web
+await page.goto('https://example.com');
+
+// Click vào phần tử
+await page.click('#submit-btn');
+
+// Điền form
+await page.type('#email', 'test@example.com');
+await page.type('#password', 'mypassword');
+
+// Chờ phần tử xuất hiện
+await page.waitForSelector('.success-message');
+
+// Lấy text
+const title = await page.title();
+console.log('Page title:', title);
+
+// Screenshot
+await page.screenshot({ path: 'screenshot.png' });</code></pre>
+          </details>
+        </div>
+        <div class="form-group">
+          <label for="scriptName">Tên Script</label>
+          <input type="text" id="scriptName" placeholder="VD: Login Facebook">
+        </div>
+        <div class="form-group">
+          <label for="scriptCode">Code</label>
+          <textarea id="scriptCode" class="code-editor" rows="15" placeholder="// Viết script ở đây..."
+            spellcheck="false"></textarea>
+        </div>
+        <div class="script-logs" id="scriptLogs" style="display:none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h4 style="margin: 0;">📋 Console Output</h4>
+            <button class="btn btn-secondary btn-sm" id="btnCopyLogs" type="button" style="padding: 4px 8px; font-size: 0.8rem; height: auto;">📋 Copy Logs</button>
+          </div>
+          <div class="log-output" id="logOutput"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnSaveScript">💾 Lưu Script</button>
+        <button class="btn btn-success" id="btnRunScript">▶ Chạy Script</button>
+      </div>
+    </div>
+  </div>
