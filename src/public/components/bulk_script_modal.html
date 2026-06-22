@@ -1,0 +1,26 @@
+  <!-- ====== Bulk Script Runner Modal ====== -->
+  <div class="modal-overlay" id="bulkScriptModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>🤖 Chạy Script Hàng Loạt (<span id="bulkScriptSelectedCount">0</span> profiles)</h2>
+        <button class="btn-close" id="btnCloseBulkScript">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="bulkScriptCode">Code JavaScript Automation</label>
+          <textarea id="bulkScriptCode" class="code-editor" rows="15" placeholder="// Viết script chạy cho tất cả profiles đã chọn..." spellcheck="false"></textarea>
+        </div>
+        <div class="script-logs" id="bulkScriptLogs" style="display:none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h4 style="margin: 0;">📋 Trạng thái chạy hàng loạt</h4>
+            <button class="btn btn-secondary btn-sm" id="btnCopyBulkLogs" type="button" style="padding: 4px 8px; font-size: 0.8rem; height: auto;">📋 Copy Logs</button>
+          </div>
+          <div class="bulk-logs-grid" id="bulkLogOutput"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnCancelBulkScript">Hủy</button>
+        <button class="btn btn-success" id="btnRunBulkScript">▶ Bắt đầu chạy</button>
+      </div>
+    </div>
+  </div>
