@@ -23,15 +23,22 @@ export function connectWS() {
     state.ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
     
     state.ws.onopen = () => {
+      console.log('[WS] Connection established successfully');
       state.ws.send(JSON.stringify({ action: 'register', clientId: state.clientId }));
     };
     
-    state.ws.onclose = () => {
+    state.ws.onerror = (err) => {
+      console.error('[WS] Connection error:', err);
+    };
+    
+    state.ws.onclose = (event) => {
+      console.warn('[WS] Connection closed:', event);
       setTimeout(connectWS, 2000);
     };
     
     state.ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
+      console.log('[WS] Message received:', data);
       
       // Route logs to bulk run logs if applicable
       if (data.profileId) {
