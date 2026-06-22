@@ -107,6 +107,7 @@ export function connectWS() {
           if (progressStatus) progressStatus.textContent = data.message;
           if (progressLog) progressLog.innerHTML = '';
         } else if (data.status === 'uploading' || data.status === 'skipped') {
+          console.log('[DEBUG Progress UI]: status =', data.status, 'percent =', data.percent, 'progressBar =', progressBar, 'progressText =', progressText);
           if (progressBar) progressBar.style.width = `${data.percent}%`;
           if (progressText) progressText.textContent = `${data.percent}%`;
           if (progressStatus) progressStatus.textContent = data.message;
