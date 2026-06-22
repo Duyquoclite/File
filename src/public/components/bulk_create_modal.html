@@ -1,0 +1,50 @@
+  <!-- ====== Bulk Create Modal ====== -->
+  <div class="modal-overlay" id="bulkCreateModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Tạo hàng loạt Profiles</h2>
+        <button class="btn-close" id="btnCloseBulkModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="bulkCount">Số lượng</label>
+            <input type="number" id="bulkCount" value="10" min="1" max="1000">
+          </div>
+          <div class="form-group">
+            <label for="bulkPrefix">Tiền tố tên</label>
+            <input type="text" id="bulkPrefix" value="Profile" placeholder="VD: FB Account">
+          </div>
+          <div class="form-group">
+            <label for="bulkStart">Số bắt đầu</label>
+            <input type="number" id="bulkStart" value="1" min="1" placeholder="VD: 7">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="bulkProxyType">Loại Proxy</label>
+            <select id="bulkProxyType">
+              <option value="none">Không dùng proxy</option>
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+              <option value="socks5">SOCKS5</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="bulkProxy">Proxy (tùy chọn)</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="bulkProxy" placeholder="host:port">
+              <button class="btn btn-secondary" id="btnCheckBulkProxy" type="button"
+                style="padding:0 12px; height:auto;">Kiểm tra</button>
+            </div>
+            <div id="bulkProxyStatus" style="font-size:0.8rem; margin-top:6px; display:none;"></div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnCancelBulk">Hủy</button>
+        <button class="btn btn-primary" id="btnConfirmBulk">Tạo</button>
+      </div>
+    </div>
+  </div>
