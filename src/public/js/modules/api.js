@@ -70,25 +70,8 @@ export function connectWS() {
         }
       }
 
-      // Route to single script runner if it matches currentScriptProfileId or if no profileId is specified
-      if (data.profileId === state.currentScriptProfileId || !data.profileId) {
-        const logOut = document.getElementById('logOutput');
-        if (logOut) {
-          if (data.type === 'log' || data.type === 'console') {
-            logOut.innerHTML += `<div class="log-line log">[LOG] ${esc(data.text)}</div>`;
-          } else if (data.type === 'error') {
-            logOut.innerHTML += `<div class="log-line error">[ERROR] ${esc(data.text)}</div>`;
-          } else if (data.type === 'info') {
-            logOut.innerHTML += `<div class="log-line info">${esc(data.text)}</div>`;
-          } else if (data.type === 'result') {
-            if (data.success) {
-              logOut.innerHTML += `<div class="log-line info">✅ Hoàn thành${data.result ? ': ' + esc(data.result) : ''}</div>`;
-            } else {
-              logOut.innerHTML += `<div class="log-line error">❌ ${esc(data.error)}</div>`;
-            }
-          }
-        }
-      } else if (data.type === 'share-progress') {
+      // 1. Handle progress messages (they don't have profileId, or even if they do, they are explicitly typed)
+      if (data.type === 'share-progress') {
         setProgressOverlay('Đang đóng gói profile...', data.message, data.percent);
       } else if (data.type === 'import-progress') {
         setProgressOverlay('Đang tải và cài đặt profile...', data.message, data.percent);
@@ -160,8 +143,28 @@ export function connectWS() {
           if (progressStatus) progressStatus.innerHTML = `<span style="color:var(--error); font-weight:bold;">❌ ${esc(data.message)}</span>`;
         }
       }
-      const logOut = document.getElementById('logOutput');
-      if (logOut) logOut.scrollTop = logOut.scrollHeight;
+
+      // 2. Route to single script runner (only for scripting logs)
+      const isScriptLog = ['log', 'console', 'error', 'info', 'result'].includes(data.type) && (data.profileId || !data.type.includes('progress'));
+      if (isScriptLog && (data.profileId === state.currentScriptProfileId || !data.profileId)) {
+        const logOut = document.getElementById('logOutput');
+        if (logOut) {
+          if (data.type === 'log' || data.type === 'console') {
+            logOut.innerHTML += `<div class="log-line log">[LOG] ${esc(data.text)}</div>`;
+          } else if (data.type === 'error') {
+            logOut.innerHTML += `<div class="log-line error">[ERROR] ${esc(data.text)}</div>`;
+          } else if (data.type === 'info') {
+            logOut.innerHTML += `<div class="log-line info">${esc(data.text)}</div>`;
+          } else if (data.type === 'result') {
+            if (data.success) {
+              logOut.innerHTML += `<div class="log-line info">✅ Hoàn thành${data.result ? ': ' + esc(data.result) : ''}</div>`;
+            } else {
+              logOut.innerHTML += `<div class="log-line error">❌ ${esc(data.error)}</div>`;
+            }
+          }
+          logOut.scrollTop = logOut.scrollHeight;
+        }
+      }
     };
   } catch (e) {
     /* WS unavailable, use HTTP fallback */
