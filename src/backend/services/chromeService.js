@@ -250,6 +250,46 @@ function updateProfileNameInPrefs(userDataDir, profileName) {
 
 
 /**
+ * Check if a proxy is online before launching Chrome.
+ * @param {string} proxyUrl
+ * @param {string} proxyType
+ * @returns {Promise<boolean>}
+ */
+async function isProxyOnline(proxyUrl, proxyType) {
+  const axios = require('axios');
+  let agent;
+  try {
+    if (proxyType === 'socks5') {
+      const { SocksProxyAgent } = await import('socks-proxy-agent');
+      agent = new SocksProxyAgent(proxyUrl);
+    } else {
+      const { HttpsProxyAgent } = await import('https-proxy-agent');
+      agent = new HttpsProxyAgent(proxyUrl);
+    }
+
+    // Ping api.ipify.org
+    await axios.get('https://api.ipify.org', {
+      httpsAgent: agent,
+      httpAgent: agent,
+      timeout: 4000,
+    });
+    return true;
+  } catch (err) {
+    try {
+      // Fallback to icanhazip.com
+      await axios.get('https://icanhazip.com', {
+        httpsAgent: agent,
+        httpAgent: agent,
+        timeout: 3000,
+      });
+      return true;
+    } catch (err2) {
+      return false;
+    }
+  }
+}
+
+/**
  * Launch a Chrome browser for a given profile.
  * @param {Object} profile - profile object from DB
  * @returns {Object} { success, error }
@@ -296,6 +336,18 @@ async function launchProfile(profile) {
       proxyUrl = `${scheme}://${cleanProxy}`;
     }
   }
+
+  // Check proxy connectivity before launch
+  if (proxyUrl) {
+    console.log(`[Chrome] Checking proxy connection for ${profile.name} via ${proxyUrl}...`);
+    const online = await isProxyOnline(proxyUrl, profile.proxyType);
+    if (!online) {
+      return { success: false, error: 'Proxy kết nối thất bại hoặc không hoạt động (Offline)!' };
+    }
+    console.log('[Chrome] Proxy is online.');
+  }
+
+  // Build Chrome launch arguments
 
   // Build Chrome launch arguments
   const args = [
