@@ -99,13 +99,20 @@ export function connectWS() {
           if (progressText) progressText.textContent = '0%';
           if (progressStatus) progressStatus.textContent = data.message;
           if (progressLog) progressLog.innerHTML = '';
-        } else if (data.status === 'uploading') {
+        } else if (data.status === 'uploading' || data.status === 'skipped') {
           if (progressBar) progressBar.style.width = `${data.percent}%`;
           if (progressText) progressText.textContent = `${data.percent}%`;
           if (progressStatus) progressStatus.textContent = data.message;
+          if (data.status === 'skipped' && progressLog) {
+            progressLog.innerHTML += `<div style="color:var(--text-muted); opacity: 0.7;">✓ [Bỏ qua] ${esc(data.currentFile)}</div>`;
+            progressLog.scrollTop = progressLog.scrollHeight;
+          }
         } else if (data.status === 'uploaded') {
+          if (progressBar) progressBar.style.width = `${data.percent}%`;
+          if (progressText) progressText.textContent = `${data.percent}%`;
+          if (progressStatus) progressStatus.textContent = data.message;
           if (progressLog) {
-            progressLog.innerHTML += `<div style="color:var(--success);">✓ ${esc(data.currentFile)}</div>`;
+            progressLog.innerHTML += `<div style="color:var(--success);">✓ Đã tải lên: ${esc(data.currentFile)}</div>`;
             progressLog.scrollTop = progressLog.scrollHeight;
           }
         } else if (data.status === 'success') {
