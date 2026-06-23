@@ -107,6 +107,8 @@ export async function checkProxyUI(proxyInputId, proxyTypeId, statusElId) {
     statusEl.dataset.proxyIp = res.data.ip || '';
     statusEl.dataset.proxyCountry = res.data.countryName || res.data.country || '';
     statusEl.dataset.proxyTimezone = res.data.timezone || '';
+    statusEl.dataset.proxyLat = res.data.latitude || '';
+    statusEl.dataset.proxyLon = res.data.longitude || '';
 
     const typeBadge = `<span style="background:rgba(99, 102, 241, 0.2); color:#818cf8; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; margin-left: 8px; border: 1px solid rgba(99, 102, 241, 0.4); font-weight: normal;">Chưa xác định (cần theo dõi)</span>`;
 
@@ -578,6 +580,10 @@ export async function showDetail(id) {
           <textarea id="editNotes" rows="2">${esc(p.notes)}</textarea>
         </div>
         <div class="form-group">
+          <label>Thẻ (Tags)</label>
+          <input type="text" id="editTags" value="${esc(p.tags || '')}" placeholder="VD: VIA, Ads, Nuôi">
+        </div>
+        <div class="form-group">
           <label>Số lần đã mở</label>
           <div style="font-size: 0.9rem; font-weight: 600; color: #60a5fa; margin-top: 4px; display: flex; align-items: center; gap: 6px;">
             <span>🚀 ${p.openCount || 0} lần</span>
@@ -742,6 +748,7 @@ export async function showDetail(id) {
     const body = {
       name: document.getElementById('editName').value,
       notes: document.getElementById('editNotes').value,
+      tags: document.getElementById('editTags').value,
       proxy: normalizedProxy,
       proxyType: editProxyType,
       fingerprint: getEditFingerprintFromFields()
@@ -750,6 +757,8 @@ export async function showDetail(id) {
       body.proxyIp = editProxyStatusEl.dataset.proxyIp;
       body.proxyCountry = editProxyStatusEl.dataset.proxyCountry || '';
       body.proxyTimezone = editProxyStatusEl.dataset.proxyTimezone || '';
+      body.proxyLat = editProxyStatusEl.dataset.proxyLat || '';
+      body.proxyLon = editProxyStatusEl.dataset.proxyLon || '';
     }
 
     const r = await api(`/profiles/${id}`, {
@@ -780,14 +789,18 @@ export async function showDetail(id) {
     editFpLangSelect.value = currentLangVal;
   }
 
-  if (p.proxy && p.proxyType !== 'none' && !p.proxyCountry && !p.proxyTimezone) {
-    await ensureProxyMetadata('editProxy', 'editProxyType', 'editProxyStatus');
-    const infoEl = document.getElementById('editProxyInfo');
-    if (infoEl) {
-      infoEl.textContent = `Thông tin: ${getProxyDisplay({ proxy: p.proxy, proxyIp: document.getElementById('editProxyStatus')?.dataset.proxyIp, proxyCountry: document.getElementById('editProxyStatus')?.dataset.proxyCountry, proxyTimezone: document.getElementById('editProxyStatus')?.dataset.proxyTimezone })}`;
-    }
-  }
   openModal('detailModal');
+
+  if (p.proxy && p.proxyType !== 'none' && !p.proxyCountry && !p.proxyTimezone) {
+    ensureProxyMetadata('editProxy', 'editProxyType', 'editProxyStatus').then(() => {
+      const infoEl = document.getElementById('editProxyInfo');
+      if (infoEl) {
+        infoEl.textContent = `Thông tin: ${getProxyDisplay({ proxy: p.proxy, proxyIp: document.getElementById('editProxyStatus')?.dataset.proxyIp, proxyCountry: document.getElementById('editProxyStatus')?.dataset.proxyCountry, proxyTimezone: document.getElementById('editProxyStatus')?.dataset.proxyTimezone })}`;
+      }
+    }).catch(err => {
+      console.warn("Failed to check proxy metadata background:", err);
+    });
+  }
 
   const btnToggleFP = document.getElementById('btnToggleFP');
   const fpContainer = document.getElementById('detailFingerprint');
@@ -1031,11 +1044,14 @@ export function setupModalEventListeners() {
       const body = {
         name,
         notes: document.getElementById('profileNotes').value,
+        tags: document.getElementById('profileTags').value,
         proxy,
         proxyType: proxyTypeValue,
         proxyIp: proxyStatusEl?.dataset.proxyIp || '',
         proxyCountry: proxyStatusEl?.dataset.proxyCountry || '',
         proxyTimezone: proxyStatusEl?.dataset.proxyTimezone || '',
+        proxyLat: proxyStatusEl?.dataset.proxyLat || '',
+        proxyLon: proxyStatusEl?.dataset.proxyLon || '',
       };
 
       if (document.getElementById('fpModeManual').checked) {
@@ -1052,6 +1068,7 @@ export function setupModalEventListeners() {
         closeModal('createModal');
         document.getElementById('profileName').value = '';
         document.getElementById('profileNotes').value = '';
+        document.getElementById('profileTags').value = '';
         document.getElementById('proxyAddress').value = '';
         document.getElementById('proxyType').value = 'none';
 
@@ -1123,6 +1140,9 @@ export function setupModalEventListeners() {
           proxyIp: bulkProxyStatusEl?.dataset.proxyIp || '',
           proxyCountry: bulkProxyStatusEl?.dataset.proxyCountry || '',
           proxyTimezone: bulkProxyStatusEl?.dataset.proxyTimezone || '',
+          proxyLat: bulkProxyStatusEl?.dataset.proxyLat || '',
+          proxyLon: bulkProxyStatusEl?.dataset.proxyLon || '',
+          tags: document.getElementById('bulkTags').value,
         }
       });
 
@@ -1169,6 +1189,68 @@ export function setupModalEventListeners() {
       state.selectedIds.clear();
       updateBulkUI();
       renderProfiles();
+    };
+  }
+
+  const btnStartMultiControl = document.getElementById('btnStartMultiControl');
+  const btnStopMultiControl = document.getElementById('btnStopMultiControl');
+
+  if (btnStartMultiControl) {
+    btnStartMultiControl.onclick = async () => {
+      const selected = Array.from(state.selectedIds);
+      if (selected.length < 2) {
+        toast('Vui lòng chọn ít nhất 2 profile để đồng bộ!', 'error');
+        return;
+      }
+      
+      const masterId = selected[0];
+      const slaveIds = selected.slice(1);
+
+      // Check if all selected profiles are running
+      const runningRes = await api('/profiles/status/running');
+      const runningIds = runningRes.data || [];
+      
+      if (!runningIds.includes(masterId)) {
+        toast('Profile Master (được chọn đầu tiên) phải đang chạy!', 'error');
+        return;
+      }
+
+      const offlineSlaves = slaveIds.filter(id => !runningIds.includes(id));
+      if (offlineSlaves.length > 0) {
+        toast('Tất cả profile được đồng bộ phải đang chạy!', 'error');
+        return;
+      }
+
+      btnStartMultiControl.disabled = true;
+      btnStartMultiControl.textContent = 'Đang bật...';
+
+      const res = await api('/automation/multi-control/start', {
+        method: 'POST',
+        body: { masterId, slaveIds }
+      });
+
+      if (res.success) {
+        toast('Đã bật điều khiển đồng bộ thành công! Hãy thao tác trên profile Master.', 'success');
+        btnStartMultiControl.style.display = 'none';
+        if (btnStopMultiControl) btnStopMultiControl.style.display = 'inline-block';
+      } else {
+        toast(res.error || 'Lỗi bật đồng bộ', 'error');
+      }
+      btnStartMultiControl.disabled = false;
+      btnStartMultiControl.textContent = '🔗 Đồng bộ';
+    };
+  }
+
+  if (btnStopMultiControl) {
+    btnStopMultiControl.onclick = async () => {
+      const res = await api('/automation/multi-control/stop', { method: 'POST' });
+      if (res.success) {
+        toast('Đã dừng đồng bộ thao tác.', 'success');
+        if (btnStartMultiControl) btnStartMultiControl.style.display = 'inline-block';
+        btnStopMultiControl.style.display = 'none';
+      } else {
+        toast(res.error || 'Lỗi', 'error');
+      }
     };
   }
 
