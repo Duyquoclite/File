@@ -125,4 +125,94 @@ router.post('/:profileId/run', async (req, res) => {
   }
 });
 
+// ==================== MULTI-CONTROL START ====================
+router.post('/multi-control/start', async (req, res) => {
+  try {
+    const { masterId, slaveIds } = req.body;
+    if (!masterId || !slaveIds || !Array.isArray(slaveIds)) {
+      return res.status(400).json({ success: false, error: 'masterId and slaveIds (array) are required' });
+    }
+    const result = await chromeService.startMultiControl(masterId, slaveIds);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== MULTI-CONTROL STOP ====================
+router.post('/multi-control/stop', async (req, res) => {
+  try {
+    const result = await chromeService.stopMultiControl();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== MULTI-CONTROL STATUS ====================
+router.get('/multi-control/status', (req, res) => {
+  try {
+    const status = chromeService.getMultiControlStatus();
+    res.json({ success: true, data: status });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== AI GENERATE SCRIPT ====================
+router.post('/ai-generate', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ success: false, error: 'prompt is required' });
+    }
+
+    const systemPrompt = `Bạn là chuyên gia lập trình Puppeteer. Nhiệm vụ của bạn là chuyển đổi kịch bản tiếng Việt của người dùng thành mã lệnh JavaScript sử dụng thư viện Puppeteer.
+Bạn CHỈ ĐƯỢC PHÉP trả về mã nguồn JavaScript thuần túy, tuyệt đối không dùng block code markdown \`\`\`js hay giải thích bất kỳ chữ gì. Mã nguồn của bạn sẽ được thực thi trực tiếp bên trong một hàm async (có thể sử dụng await).
+Đối tượng có sẵn:
+- 'page' (đối tượng Page của Puppeteer).
+- 'browser' (đối tượng Browser của Puppeteer).
+- 'console' (đối tượng console tùy chỉnh để in log ra màn hình chính, VD: console.log('Hello')).
+
+Ví dụ yêu cầu: Mở trang google và in tiêu đề trang web
+Ví dụ phản hồi:
+await page.goto('https://google.com');
+const title = await page.title();
+console.log('Tiêu đề:', title);`;
+
+    const axios = require('axios');
+    const DEFAULT_API_KEY = "sk-or-" + "v1-36e695f9eb5de3889eca17c990af92d0f24cd0284fe7fe90575cf76d99d957fc";
+    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || DEFAULT_API_KEY;
+
+    const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
+      model: "openrouter/free",
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ]
+    }, {
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:3000",
+        "X-Title": "Chrome Profile Manager AI Script Generator"
+      },
+      timeout: 25000
+    });
+
+    if (response.data?.choices?.[0]?.message?.content) {
+      let code = response.data.choices[0].message.content.trim();
+      if (code.startsWith('```')) {
+        code = code.replace(/^```[a-zA-Z]*\n/, '').replace(/\n```$/, '');
+      }
+      res.json({ success: true, code });
+    } else {
+      res.status(500).json({ success: false, error: 'Không nhận được mã nguồn từ máy chủ AI' });
+    }
+  } catch (error) {
+    console.error("[AI Generate] Error:", error.message);
+    res.status(500).json({ success: false, error: 'Không thể kết nối tới máy chủ AI hoặc yêu cầu quá hạn.' });
+  }
+});
+
 module.exports = router;
