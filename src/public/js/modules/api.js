@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { toast, setProgressOverlay, hideProgressOverlay, esc } from './ui.js';
+import { toast, setProgressOverlay, hideProgressOverlay, esc } from './utils.js';
 
 export async function api(url, opts = {}) {
   opts.headers = {
