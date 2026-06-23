@@ -33,6 +33,39 @@ export function setupAutomationEventListeners() {
     };
   }
 
+  const btnGenerateAIScript = document.getElementById('btnGenerateAIScript');
+  if (btnGenerateAIScript) {
+    btnGenerateAIScript.onclick = async () => {
+      const prompt = document.getElementById('aiPrompt').value.trim();
+      if (!prompt) {
+        toast('Vui lòng nhập kịch bản tiếng Việt!', 'error');
+        return;
+      }
+
+      btnGenerateAIScript.disabled = true;
+      btnGenerateAIScript.textContent = 'Đang tạo...';
+
+      try {
+        const res = await api('/automation/ai-generate', {
+          method: 'POST',
+          body: { prompt }
+        });
+
+        if (res.success && res.code) {
+          document.getElementById('scriptCode').value = res.code;
+          toast('Đã tạo kịch bản tự động hóa bằng AI thành công!', 'success');
+        } else {
+          toast(res.error || 'Lỗi khi tạo script', 'error');
+        }
+      } catch (err) {
+        toast('Lỗi kết nối tới máy chủ AI: ' + err.message, 'error');
+      } finally {
+        btnGenerateAIScript.disabled = false;
+        btnGenerateAIScript.textContent = 'Tạo Code AI';
+      }
+    };
+  }
+
   const btnSaveScript = document.getElementById('btnSaveScript');
   if (btnSaveScript) {
     btnSaveScript.onclick = async () => {
