@@ -1,0 +1,72 @@
+Ý TƯỞNG: SAO LƯU & ĐỒNG BỘ ĐÁM MÂY (PROFILE BACKUP & CLOUD SYNC) QUA TELEGRAM BOT
+=============================================================================
+
+[LỰA CHỌN]: Phương án B - Lưu trữ qua Telegram Bot API (Đám mây miễn phí)
+- Sử dụng Telegram Channel hoặc Group riêng tư làm kho lưu trữ file backup (.zip).
+- Dung lượng lưu trữ tối đa mỗi file lên đến 2GB hoàn toàn miễn phí, tốc độ cao.
+- Không cần cấu hình server lưu trữ phức tạp, chỉ cần Bot Token và Chat ID.
+
+1. Tối ưu hóa dung lượng trước khi nén (Quan trọng)
+--------------------------------------------------
+Trước khi tiến hành nén thư mục profile Chrome, backend sẽ lọc và loại trừ (exclude) các thư mục đệm không cần thiết để giảm kích thước file zip từ hàng trăm MB xuống chỉ còn khoảng 10MB - 30MB:
+- Thư mục Cache: `Cache/*`, `Code Cache/*`, `GPUCache/*`
+- Thư mục Service Worker: `Service Worker/CacheStorage/*`
+- Thư mục tạm khác: `crashpad/*`, `*.tmp`
+
+2. Thiết kế Database (SQLite)
+-----------------------------
+Bảng `profile_backups`:
+```sql
+CREATE TABLE IF NOT EXISTS profile_backups (
+  id TEXT PRIMARY KEY,
+  profile_id TEXT NOT NULL,
+  backup_type TEXT NOT NULL,      -- Luôn là 'telegram'
+  tg_file_id TEXT NOT NULL,       -- file_id do Telegram trả về khi upload thành công
+  tg_message_id INTEGER NOT NULL,  -- message_id để phục vụ xóa tin nhắn khi xóa bản backup
+  file_size INTEGER NOT NULL,     -- Dung lượng file (bytes)
+  notes TEXT,                     -- Ghi chú của bản backup
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+);
+```
+
+3. Thiết kế các API Endpoints
+----------------------------
+
+A. [POST] /api/profiles/:id/backup
+- Request Body:
+  {
+    "notes": "Backup trước khi chạy tương tác group"
+  }
+- Luồng xử lý:
+  1. Kiểm tra trạng thái profile (yêu cầu profile phải đang đóng - status != 'running').
+  2. Dùng thư viện `archiver` để nén thư mục profile `profiles/<profile_id>`, bỏ qua các thư mục Cache.
+  3. Gửi file zip lên Telegram Channel qua API:
+     `POST https://api.telegram.org/bot<TOKEN>/sendDocument` với Chat ID chỉ định.
+  4. Nhận về `file_id` và `message_id` từ API Telegram.
+  5. Lưu thông tin bản backup vào SQLite.
+  6. Trả về kết quả: `{ "success": true, "message": "Backup thành công!", "backupId": "uuid-..." }`
+
+B. [POST] /api/profiles/:id/restore
+- Request Body:
+  {
+    "backupId": "backup-uuid-abc"
+  }
+- Luồng xử lý:
+  1. Kiểm tra trạng thái profile (yêu cầu profile đang đóng).
+  2. Lấy thông tin bản backup từ cơ sở dữ liệu (lấy `tg_file_id`).
+  3. Gọi API Telegram `getFile` để lấy link tải trực tiếp file zip và download file tạm về server.
+  4. Đổi tên thư mục profile hiện tại thành `profiles/<profile_id>_temp_bak` (để rollback nếu có lỗi).
+  5. Giải nén file zip vừa tải về vào `profiles/<profile_id>`.
+  6. Nếu giải nén thành công, xóa thư mục backup tạm `_temp_bak`. Nếu lỗi, trả lại thư mục ban đầu và báo lỗi.
+  7. Trả về kết quả: `{ "success": true, "message": "Khôi phục dữ liệu thành công!" }`
+
+C. [GET] /api/profiles/:id/backups
+- Trả về danh sách các bản backup hiện có của profile đó từ database SQLite (gồm: id, file_size, notes, created_at).
+
+D. [DELETE] /api/profiles/backups/:backupId
+- Luồng xử lý:
+  1. Lấy `tg_message_id` từ database.
+  2. Gửi request xóa tin nhắn chứa file trên Telegram qua API `deleteMessage` để giải phóng bộ nhớ Channel.
+  3. Xóa bản ghi trong SQLite database.
+  4. Trả về kết quả: `{ "success": true }`
