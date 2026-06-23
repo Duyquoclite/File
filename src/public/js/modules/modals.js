@@ -291,6 +291,255 @@ export function toggleGroupSelect(groupKey, e) {
   renderProfiles();
 }
 
+// Module-level state for Cookie manager
+let cookieDomains = [];
+let currentCookieFormat = 'json';
+let currentCookieData = null;
+let isEditingCookies = false;
+
+function syntaxHighlightJSON(json) {
+  if (typeof json !== 'string') {
+    json = JSON.stringify(json, undefined, 2);
+  }
+  json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, function (match) {
+    let cls = 'number';
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) {
+        cls = 'key';
+      } else {
+        cls = 'string';
+      }
+    } else if (/true|false/.test(match)) {
+      cls = 'boolean';
+    } else if (/null/.test(match)) {
+      cls = 'null';
+    }
+    return '<span class="json-' + cls + '">' + match + '</span>';
+  });
+}
+
+async function loadCookieDomains(profileId) {
+  const domainsListEl = document.getElementById('cookieDomainsList');
+  if (!domainsListEl) return;
+  
+  domainsListEl.innerHTML = '<div style="font-size:0.85rem;color:var(--text-muted);padding:10px;">Đang tải danh sách...</div>';
+  
+  try {
+    const res = await api(`/profiles/${profileId}/cookies`);
+    if (res.success) {
+      cookieDomains = res.data || [];
+      renderCookieDomains(profileId, cookieDomains);
+    } else {
+      domainsListEl.innerHTML = `<div style="font-size:0.85rem;color:var(--danger);padding:10px;">Lỗi: ${res.error}</div>`;
+    }
+  } catch (err) {
+    domainsListEl.innerHTML = `<div style="font-size:0.85rem;color:var(--danger);padding:10px;">Không thể kết nối server.</div>`;
+  }
+}
+
+function renderCookieDomains(profileId, list, searchFilter = '') {
+  const domainsListEl = document.getElementById('cookieDomainsList');
+  if (!domainsListEl) return;
+  
+  const filtered = list.filter(item => 
+    item.domain.toLowerCase().includes(searchFilter.toLowerCase())
+  );
+  
+  if (filtered.length === 0) {
+    domainsListEl.innerHTML = '<div style="font-size:0.85rem;color:var(--text-muted);padding:10px;">Không có website nào</div>';
+    return;
+  }
+  
+  domainsListEl.innerHTML = filtered.map(item => `
+    <div class="cookie-domain-item" data-domain="${esc(item.domain)}">
+      <span style="word-break:break-all;padding-right:8px;">${esc(item.domain)}</span>
+      <span class="count">${item.count}</span>
+    </div>
+  `).join('');
+  
+  domainsListEl.querySelectorAll('.cookie-domain-item').forEach(el => {
+    el.onclick = () => {
+      domainsListEl.querySelectorAll('.cookie-domain-item').forEach(item => item.classList.remove('active'));
+      el.classList.add('active');
+      const domain = el.dataset.domain;
+      selectCookieDomain(profileId, domain);
+    };
+  });
+}
+
+async function selectCookieDomain(profileId, domain) {
+  const mainPanel = document.getElementById('cookieMainPanel');
+  if (!mainPanel) return;
+  
+  mainPanel.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);">Đang tải cookie...</div>';
+  
+  try {
+    const res = await api(`/profiles/${profileId}/cookies?domain=${encodeURIComponent(domain)}`);
+    if (res.success) {
+      currentCookieData = res.data;
+      isEditingCookies = false;
+      renderCookieEditor(profileId, domain);
+    } else {
+      mainPanel.innerHTML = `<div style="padding:20px;color:var(--danger);">Lỗi tải cookie: ${res.error}</div>`;
+    }
+  } catch (err) {
+    mainPanel.innerHTML = `<div style="padding:20px;color:var(--danger);">Lỗi kết nối.</div>`;
+  }
+}
+
+function renderCookieEditor(profileId, domain) {
+  const mainPanel = document.getElementById('cookieMainPanel');
+  if (!mainPanel) return;
+
+  const profileIsRunning = state.profiles.find(p => p.id === profileId)?.isRunning || false;
+  
+  let coloredJsonHtml = '';
+  let jsonString = '';
+  if (currentCookieData && currentCookieData.cookies) {
+    const cleanList = currentCookieData.cookies.map(c => ({
+      name: c.name,
+      value: c.value,
+      domain: c.domain,
+      path: c.path,
+      secure: c.secure,
+      httpOnly: c.httpOnly,
+      sameSite: c.sameSite === 0 ? 'no_restriction' : c.sameSite === 2 ? 'strict' : 'lax',
+      expires: c.expires ? Math.floor((c.expires - 11644473600000000) / 1000000000) : null
+    }));
+    jsonString = JSON.stringify(cleanList, null, 2);
+    coloredJsonHtml = syntaxHighlightJSON(jsonString);
+  }
+
+  const rawString = currentCookieData ? currentCookieData.raw : '';
+
+  mainPanel.innerHTML = `
+    <div class="cookie-editor-container">
+      <div class="cookie-header-bar">
+        <div class="cookie-header-title" style="word-break:break-all;">
+          🍪 ${esc(domain)}
+        </div>
+        <div style="display:flex; gap:12px; align-items:center;">
+          <div class="cookie-format-toggles">
+            <button class="cookie-format-btn ${currentCookieFormat === 'json' ? 'active' : ''}" id="btnFmtJson">JSON</button>
+            <button class="cookie-format-btn ${currentCookieFormat === 'raw' ? 'active' : ''}" id="btnFmtRaw">RAW</button>
+          </div>
+          <div class="cookie-action-buttons">
+            <button class="btn btn-secondary btn-sm" id="btnCopyCookie">Copy</button>
+            ${isEditingCookies ? `
+              <button class="btn btn-ghost btn-sm" id="btnCancelEditCookie">Hủy</button>
+              <button class="btn btn-primary btn-sm" id="btnSaveCookie" ${profileIsRunning ? 'disabled style="opacity:0.6; cursor:not-allowed;"' : ''}>Lưu</button>
+            ` : `
+              <button class="btn btn-primary btn-sm" id="btnEditCookie">Chỉnh sửa</button>
+            `}
+          </div>
+        </div>
+      </div>
+      
+      <div class="cookie-editor-wrapper">
+        ${isEditingCookies ? `
+          <textarea class="cookie-editor-textarea" id="cookieTextarea" placeholder="${currentCookieFormat === 'json' ? 'Nhập cookie dạng JSON array...' : 'Nhập cookie dạng name=value; name2=value2;...'}" autocomplete="off" spellcheck="false">${currentCookieFormat === 'json' ? esc(jsonString) : esc(rawString)}</textarea>
+        ` : `
+          ${currentCookieFormat === 'json' ? `
+            <pre class="cookie-json-pre" id="cookieJsonView"><code>${coloredJsonHtml}</code></pre>
+          ` : `
+            <textarea class="cookie-editor-textarea" readonly id="cookieTextarea" style="opacity: 0.85;" autocomplete="off" spellcheck="false">${esc(rawString)}</textarea>
+          `}
+        `}
+      </div>
+      
+      ${profileIsRunning ? `
+        <div class="cookie-warning">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          Trình duyệt đang chạy. Bạn chỉ có thể xem, vui lòng đóng trình duyệt để chỉnh sửa và lưu cookie.
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  const btnFmtJson = document.getElementById('btnFmtJson');
+  const btnFmtRaw = document.getElementById('btnFmtRaw');
+  const btnCopyCookie = document.getElementById('btnCopyCookie');
+  const btnEditCookie = document.getElementById('btnEditCookie');
+  const btnCancelEditCookie = document.getElementById('btnCancelEditCookie');
+  const btnSaveCookie = document.getElementById('btnSaveCookie');
+
+  btnFmtJson.onclick = () => {
+    if (currentCookieFormat === 'json') return;
+    currentCookieFormat = 'json';
+    renderCookieEditor(profileId, domain);
+  };
+
+  btnFmtRaw.onclick = () => {
+    if (currentCookieFormat === 'raw') return;
+    currentCookieFormat = 'raw';
+    renderCookieEditor(profileId, domain);
+  };
+
+  btnCopyCookie.onclick = () => {
+    const textToCopy = currentCookieFormat === 'json' ? jsonString : rawString;
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      toast('Đã copy cookie vào clipboard!', 'success');
+    }).catch(() => {
+      toast('Lỗi copy cookie', 'error');
+    });
+  };
+
+  if (btnEditCookie) {
+    btnEditCookie.onclick = () => {
+      isEditingCookies = true;
+      renderCookieEditor(profileId, domain);
+    };
+  }
+
+  if (btnCancelEditCookie) {
+    btnCancelEditCookie.onclick = () => {
+      isEditingCookies = false;
+      renderCookieEditor(profileId, domain);
+    };
+  }
+
+  if (btnSaveCookie && !profileIsRunning) {
+    btnSaveCookie.onclick = async () => {
+      const textarea = document.getElementById('cookieTextarea');
+      if (!textarea) return;
+      
+      const content = textarea.value.trim();
+      btnSaveCookie.disabled = true;
+      btnSaveCookie.textContent = 'Đang lưu...';
+      
+      try {
+        const res = await api(`/profiles/${profileId}/cookies`, {
+          method: 'PUT',
+          body: {
+            domain,
+            format: currentCookieFormat,
+            content
+          }
+        });
+        
+        if (res.success) {
+          toast('Đã lưu cookie thành công!', 'success');
+          await loadCookieDomains(profileId);
+          await selectCookieDomain(profileId, domain);
+        } else {
+          toast(res.error || 'Lỗi lưu cookie', 'error');
+          btnSaveCookie.disabled = false;
+          btnSaveCookie.textContent = 'Lưu';
+        }
+      } catch (err) {
+        toast('Lỗi kết nối lưu cookie', 'error');
+        btnSaveCookie.disabled = false;
+        btnSaveCookie.textContent = 'Lưu';
+      }
+    };
+  }
+}
+
 export async function showDetail(id) {
   const res = await api(`/profiles/${id}`);
   if (!res.success) {
@@ -312,85 +561,146 @@ export async function showDetail(id) {
 
   document.getElementById('detailTitle').textContent = p.name;
   document.getElementById('detailBody').innerHTML = `
-    <div class="detail-section">
-      <h4>Thông tin cơ bản</h4>
-      <div class="form-group">
-        <label>Tên</label>
-        <input type="text" id="editName" value="${esc(p.name)}">
-      </div>
-      <div class="form-group">
-        <label>Ghi chú</label>
-        <textarea id="editNotes" rows="2">${esc(p.notes)}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Số lần đã mở</label>
-        <div style="font-size: 0.9rem; font-weight: 600; color: #60a5fa; margin-top: 4px; display: flex; align-items: center; gap: 6px;">
-          <span>🚀 ${p.openCount || 0} lần</span>
+    <div class="modal-tabs">
+      <div class="modal-tab active" id="tabConfigBtn">Cấu hình</div>
+      <div class="modal-tab" id="tabCookieBtn">Cookie</div>
+    </div>
+
+    <div class="tab-content active" id="tabConfigContent">
+      <div class="detail-section">
+        <h4>Thông tin cơ bản</h4>
+        <div class="form-group">
+          <label>Tên</label>
+          <input type="text" id="editName" value="${esc(p.name)}">
+        </div>
+        <div class="form-group">
+          <label>Ghi chú</label>
+          <textarea id="editNotes" rows="2">${esc(p.notes)}</textarea>
+        </div>
+        <div class="form-group">
+          <label>Số lần đã mở</label>
+          <div style="font-size: 0.9rem; font-weight: 600; color: #60a5fa; margin-top: 4px; display: flex; align-items: center; gap: 6px;">
+            <span>🚀 ${p.openCount || 0} lần</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Loại Proxy</label>
+            <select id="editProxyType">
+              <option value="none" ${p.proxyType === 'none' ? 'selected' : ''}>Không</option>
+              <option value="http" ${p.proxyType === 'http' ? 'selected' : ''}>HTTP</option>
+              <option value="https" ${p.proxyType === 'https' ? 'selected' : ''}>HTTPS</option>
+              <option value="socks5" ${p.proxyType === 'socks5' ? 'selected' : ''}>SOCKS5</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Proxy</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="editProxy" value="${esc(p.proxy ? p.proxy.replace(/^[a-zA-Z0-9]+:\/*/, '') : '')}">
+              <button class="btn btn-secondary" id="btnCheckEditProxy" type="button" style="padding:0 12px; height:auto;">Kiểm tra</button>
+            </div>
+            <div id="editProxyInfo" style="font-size:0.8rem; margin-top:8px; color:var(--text-muted);">
+              ${p.proxy ? `Thông tin: ${esc(getProxyDisplay(p))}` : ''}
+            </div>
+            <div id="editProxyStatus" style="font-size:0.8rem; margin-top:6px; display:none;"></div>
+            <div id="editProxyCategory" style="font-size:0.8rem; margin-top:6px;">
+              Trạng thái: 
+              ${(() => {
+                const cat = p.proxyCategory || 'undetermined';
+                if (cat === 'static') return `<span style="background:rgba(46, 204, 113, 0.2); color:#2ecc71; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(46, 204, 113, 0.4); font-weight: normal;">Proxy Tĩnh</span>`;
+                if (cat === 'dynamic') return `<span style="background:rgba(241, 196, 15, 0.2); color:#f1c40f; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(241, 196, 15, 0.4); font-weight: normal;">Proxy Động</span>`;
+                return `<span style="background:rgba(99, 102, 241, 0.2); color:#818cf8; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(99, 102, 241, 0.4); font-weight: normal;">Chưa xác định (đang theo dõi...)</span>`;
+              })()}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="form-row">
-        <div class="form-group">
-          <label>Loại Proxy</label>
-          <select id="editProxyType">
-            <option value="none" ${p.proxyType === 'none' ? 'selected' : ''}>Không</option>
-            <option value="http" ${p.proxyType === 'http' ? 'selected' : ''}>HTTP</option>
-            <option value="https" ${p.proxyType === 'https' ? 'selected' : ''}>HTTPS</option>
-            <option value="socks5" ${p.proxyType === 'socks5' ? 'selected' : ''}>SOCKS5</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Proxy</label>
+      <div class="detail-section">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h4 style="margin:0;">Fingerprint</h4>
           <div style="display:flex; gap:8px;">
-            <input type="text" id="editProxy" value="${esc(p.proxy ? p.proxy.replace(/^[a-zA-Z0-9]+:\/*/, '') : '')}">
-            <button class="btn btn-secondary" id="btnCheckEditProxy" type="button" style="padding:0 12px; height:auto;">Kiểm tra</button>
-          </div>
-          <div id="editProxyInfo" style="font-size:0.8rem; margin-top:8px; color:var(--text-muted);">
-            ${p.proxy ? `Thông tin: ${esc(getProxyDisplay(p))}` : ''}
-          </div>
-          <div id="editProxyStatus" style="font-size:0.8rem; margin-top:6px; display:none;"></div>
-          <div id="editProxyCategory" style="font-size:0.8rem; margin-top:6px;">
-            Trạng thái: 
-            ${(() => {
-              const cat = p.proxyCategory || 'undetermined';
-              if (cat === 'static') return `<span style="background:rgba(46, 204, 113, 0.2); color:#2ecc71; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(46, 204, 113, 0.4); font-weight: normal;">Proxy Tĩnh</span>`;
-              if (cat === 'dynamic') return `<span style="background:rgba(241, 196, 15, 0.2); color:#f1c40f; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(241, 196, 15, 0.4); font-weight: normal;">Proxy Động</span>`;
-              return `<span style="background:rgba(99, 102, 241, 0.2); color:#818cf8; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(99, 102, 241, 0.4); font-weight: normal;">Chưa xác định (đang theo dõi...)</span>`;
-            })()}
+            <button class="btn btn-secondary btn-sm" id="btnRandomEditFp" type="button">Random fingerprint</button>
+            <button class="btn btn-ghost btn-sm" id="btnToggleFP" type="button">Hiện</button>
           </div>
         </div>
+        <div id="detailFingerprint" style="display:none;" class="fp-details">
+          <div class="fp-item"><span>User Agent</span><input type="text" id="editFpUA" list="uaList" value="${esc(fp.userAgent || '')}"></div>
+          <div class="fp-item"><span>Platform</span><input type="text" id="editFpPlatform" list="platformList" value="${esc(fp.platform || 'Win32')}"></div>
+          <div class="fp-item"><span>Screen</span>
+            <div style="display:flex; gap:8px;">
+              <input type="number" id="editFpScreenWidth" value="${fp.screen?.width || 1920}" min="800" style="width:100px;">
+              <input type="number" id="editFpScreenHeight" value="${fp.screen?.height || 1080}" min="600" style="width:100px;">
+            </div>
+          </div>
+          <div class="fp-item"><span>Language</span><select id="editFpLang"></select></div>
+          <div class="fp-item"><span>Timezone</span><input type="text" id="editFpTZ" list="tzList" value="${esc(fp.timezone || 'Asia/Ho_Chi_Minh')}"></div>
+          <div class="fp-item"><span>WebGL</span><input type="text" id="editFpWebGL" list="webglList" value="${esc(fp.webgl?.renderer || '')}"></div>
+          <div class="fp-item"><span>CPU Cores</span><input type="number" id="editFpCores" value="${fp.hardwareConcurrency || 8}" min="1" style="width:100px;"></div>
+          <div class="fp-item"><span>RAM</span><input type="number" id="editFpRAM" value="${fp.deviceMemory || 16}" min="1" style="width:100px;"></div>
+        </div>
+      </div>
+      <div class="detail-section">
+        <h4>ID</h4>
+        <code style="font-size:0.8rem;color:var(--text-muted);word-break:break-all;">${p.id}</code>
       </div>
     </div>
 
-    <div class="detail-section">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h4 style="margin:0;">Fingerprint</h4>
-        <div style="display:flex; gap:8px;">
-          <button class="btn btn-secondary btn-sm" id="btnRandomEditFp" type="button">Random fingerprint</button>
-          <button class="btn btn-ghost btn-sm" id="btnToggleFP" type="button">Hiện</button>
-        </div>
-      </div>
-      <div id="detailFingerprint" style="display:none;" class="fp-details">
-        <div class="fp-item"><span>User Agent</span><input type="text" id="editFpUA" list="uaList" value="${esc(fp.userAgent || '')}"></div>
-        <div class="fp-item"><span>Platform</span><input type="text" id="editFpPlatform" list="platformList" value="${esc(fp.platform || 'Win32')}"></div>
-        <div class="fp-item"><span>Screen</span>
-          <div style="display:flex; gap:8px;">
-            <input type="number" id="editFpScreenWidth" value="${fp.screen?.width || 1920}" min="800" style="width:100px;">
-            <input type="number" id="editFpScreenHeight" value="${fp.screen?.height || 1080}" min="600" style="width:100px;">
+    <div class="tab-content" id="tabCookieContent">
+      <div class="cookie-manager">
+        <div class="cookie-sidebar">
+          <div class="cookie-search">
+            <input type="text" id="cookieSearchInput" placeholder="Tìm kiếm website...">
+          </div>
+          <div class="cookie-domains-list" id="cookieDomainsList">
+            <!-- Loaded dynamically -->
           </div>
         </div>
-        <div class="fp-item"><span>Language</span><select id="editFpLang"></select></div>
-        <div class="fp-item"><span>Timezone</span><input type="text" id="editFpTZ" list="tzList" value="${esc(fp.timezone || 'Asia/Ho_Chi_Minh')}"></div>
-        <div class="fp-item"><span>WebGL</span><input type="text" id="editFpWebGL" list="webglList" value="${esc(fp.webgl?.renderer || '')}"></div>
-        <div class="fp-item"><span>CPU Cores</span><input type="number" id="editFpCores" value="${fp.hardwareConcurrency || 8}" min="1" style="width:100px;"></div>
-        <div class="fp-item"><span>RAM</span><input type="number" id="editFpRAM" value="${fp.deviceMemory || 16}" min="1" style="width:100px;"></div>
+        <div class="cookie-main" id="cookieMainPanel">
+          <div class="cookie-placeholder">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4">
+              <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/>
+              <path d="M12 6a2 2 0 1 0 2 2 2 2 0 0 0-2-2zm0 5v5m0-9.9h.1"/>
+            </svg>
+            <span style="font-size: 0.9rem;">Chọn một website ở danh sách bên trái để xem và quản lý cookie.</span>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="detail-section">
-      <h4>ID</h4>
-      <code style="font-size:0.8rem;color:var(--text-muted);word-break:break-all;">${p.id}</code>
     </div>
   `;
+
+  // Attach tabs events
+  const tabConfigBtn = document.getElementById('tabConfigBtn');
+  const tabCookieBtn = document.getElementById('tabCookieBtn');
+  const tabConfigContent = document.getElementById('tabConfigContent');
+  const tabCookieContent = document.getElementById('tabCookieContent');
+  const btnSaveDetail = document.getElementById('btnSaveDetail');
+
+  tabConfigBtn.onclick = () => {
+    tabConfigBtn.classList.add('active');
+    tabCookieBtn.classList.remove('active');
+    tabConfigContent.classList.add('active');
+    tabCookieContent.classList.remove('active');
+    btnSaveDetail.style.display = 'block';
+  };
+
+  tabCookieBtn.onclick = () => {
+    tabConfigBtn.classList.remove('active');
+    tabCookieBtn.classList.add('active');
+    tabConfigContent.classList.remove('active');
+    tabCookieContent.classList.add('active');
+    btnSaveDetail.style.display = 'none';
+    loadCookieDomains(id);
+  };
+
+  // Attach search event
+  const cookieSearchInput = document.getElementById('cookieSearchInput');
+  if (cookieSearchInput) {
+    cookieSearchInput.oninput = (e) => {
+      renderCookieDomains(id, cookieDomains, e.target.value);
+    };
+  }
 
   function getEditFingerprintFromFields() {
     const ua = document.getElementById('editFpUA').value.trim();
@@ -479,7 +789,6 @@ export async function showDetail(id) {
   }
   openModal('detailModal');
 
-  // Attach fingerprint toggle
   const btnToggleFP = document.getElementById('btnToggleFP');
   const fpContainer = document.getElementById('detailFingerprint');
   if (btnToggleFP && fpContainer) {
@@ -491,7 +800,6 @@ export async function showDetail(id) {
     };
   }
 
-  // Attach random edit fingerprint
   const btnRandomEditFp = document.getElementById('btnRandomEditFp');
   if (btnRandomEditFp) {
     btnRandomEditFp.onclick = async () => {
