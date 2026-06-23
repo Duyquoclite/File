@@ -3,7 +3,10 @@
   display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
   z-index: 1000; align-items: center; justify-content: center; padding: 20px;
 }
-.modal-overlay.active { display: flex; animation: fadeIn 0.2s ease; }
+#confirmModal, #messageModal {
+  z-index: 1500;
+}
+.modal-overlay.active { display: flex; animation: fadeIn 0.2s ease forwards; opacity: 1 !important; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .progress-overlay {
