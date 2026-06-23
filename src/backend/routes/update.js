@@ -349,14 +349,62 @@ router.post('/github-push', async (req, res) => {
       }
     }
 
+    // D. Identify and delete obsolete files on GitHub that do not exist locally under 'src/'
+    const deletedFiles = [];
+    const filesToDelete = [];
+    for (const githubPath of Object.keys(fileShaMap)) {
+      if (githubPath.startsWith('src/')) {
+        const relativePath = githubPath.substring(4); // Remove "src/"
+        if (!localFiles[relativePath]) {
+          filesToDelete.push(githubPath);
+        }
+      }
+    }
+
+    if (filesToDelete.length > 0) {
+      console.log(`[GitHub Push] Found ${filesToDelete.length} obsolete files to delete on GitHub.`);
+      for (const githubPath of filesToDelete) {
+        const relativePath = githubPath.substring(4);
+        broadcastProgress({
+          status: 'deleting',
+          currentFile: relativePath,
+          message: `Đang xóa tệp dư thừa trên GitHub: ${relativePath}...`
+        });
+        console.log(`[GitHub Push] Deleting remote file: ${githubPath}...`);
+
+        try {
+          await axios.delete(
+            `https://api.github.com/repos/${cleanRepo}/contents/${githubPath}`,
+            {
+              headers,
+              data: {
+                message: `Delete obsolete file ${relativePath} (not found locally)`,
+                sha: fileShaMap[githubPath],
+                branch: cleanBranch
+              }
+            }
+          );
+          deletedFiles.push(relativePath);
+        } catch (delErr) {
+          console.error(`[GitHub Push] Failed to delete ${githubPath}:`, delErr.response?.data || delErr.message);
+          console.warn(`[GitHub Push] Failed to delete ${githubPath} from remote repository.`);
+        }
+      }
+    }
+
     broadcastProgress({
       status: 'success',
       total: totalFiles,
       uploadedFiles: uploadedFiles,
-      message: `Đã đẩy ${totalFiles} tệp tin lên thư mục src của GitHub thành công!`
+      deletedFiles: deletedFiles,
+      message: `Đã đẩy ${totalFiles} tệp tin lên thư mục src của GitHub thành công!${deletedFiles.length > 0 ? ` Đã xóa ${deletedFiles.length} tệp dư thừa.` : ''}`
     });
 
-    res.json({ success: true, message: 'Đã đẩy mã nguồn lên thư mục src của GitHub thành công!' });
+    res.json({ 
+      success: true, 
+      message: `Đã đẩy mã nguồn lên thư mục src của GitHub thành công!${deletedFiles.length > 0 ? ` Đã xóa ${deletedFiles.length} tệp dư thừa.` : ''}`,
+      data: { uploadedCount: uploadedFiles.length, deletedCount: deletedFiles.length }
+    });
   } catch (error) {
     console.error('[GitHub Push] Failed:', error.message);
     broadcastProgress({
