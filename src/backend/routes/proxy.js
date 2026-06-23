@@ -53,6 +53,8 @@ router.post('/check', async (req, res) => {
         countryName: response.data.country || response.data.country_name || response.data.country_code || 'Unknown',
         timezone: response.data.timezone?.id || 'Unknown',
         isp: response.data.connection?.isp || 'Unknown',
+        latitude: response.data.latitude || '',
+        longitude: response.data.longitude || '',
         timeMs: time
       }
     });
