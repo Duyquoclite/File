@@ -17,6 +17,12 @@ puppeteer.use(StealthPlugin());
 // In-memory map of running browsers: profileId -> { browser, pages }
 const runningBrowsers = new Map();
 
+// Active multi-control session configuration
+let activeMultiControlSession = null;
+
+// Track active multi-control event listeners for clean up on stop
+const activeMultiControlListeners = new Map(); // profileId -> { targetcreated, targetchanged }
+
 // Base directory for Chrome user-data profiles
 const PROFILES_DIR = path.join(__dirname, '..', '..', 'profiles');
 const EXTENSIONS_DIR = path.join(__dirname, '..', '..', 'extensions');
@@ -460,8 +466,27 @@ async function launchProfile(profile) {
           await page.evaluateOnNewDocument(buildFingerprintScript(fingerprint));
         }
 
-
-
+        // Spoof Geolocation based on Proxy latitude & longitude
+        if (profile.proxyLat && profile.proxyLon) {
+          const lat = parseFloat(profile.proxyLat);
+          const lon = parseFloat(profile.proxyLon);
+          if (!isNaN(lat) && !isNaN(lon)) {
+            await page.setGeolocation({ latitude: lat, longitude: lon, accuracy: 100 }).catch(() => {});
+            
+            // Set up listener to auto-grant permission on navigation
+            page.on('framenavigated', async (frame) => {
+              if (frame === page.mainFrame()) {
+                try {
+                  const url = page.url();
+                  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                    const origin = new URL(url).origin;
+                    await browser.defaultBrowserContext().overridePermissions(origin, ['geolocation']).catch(() => {});
+                  }
+                } catch (err) {}
+              }
+            });
+          }
+        }
       } catch (e) {
         // Page might have been closed already
       }
@@ -659,6 +684,330 @@ async function closeAll() {
   runningBrowsers.clear();
 }
 
+async function startMultiControl(masterId, slaveIds) {
+  if (activeMultiControlSession) {
+    await stopMultiControl();
+  }
+
+  const profileIds = [masterId, ...slaveIds];
+
+  try {
+    activeMultiControlSession = { profileIds };
+
+    // Common script to inject into pages
+    const injectSyncListenerScript = (sourceId) => {
+      if (window.hasMultiControlInjected) return;
+      window.hasMultiControlInjected = true;
+      window.multiControlSourceId = sourceId;
+      window.isPerformingSyncAction = false;
+
+      function getCssSelector(el) {
+        if (!(el instanceof Element)) return null;
+        const path = [];
+        let current = el;
+        while (current && current.nodeType === Node.ELEMENT_NODE) {
+          let selector = current.nodeName.toLowerCase();
+          
+          const id = current.id;
+          const isDynamicId = id && (/^(u_|mount_|jsc_|em_|js_|_|u_jsonp_)/.test(id) || (id.match(/\d/g) || []).length > 3);
+          
+          if (id && !isDynamicId) {
+            selector += '#' + id;
+            path.unshift(selector);
+            break;
+          } else {
+            const classes = Array.from(current.classList).filter(c => {
+              return c && !/^(u_|mount_|jsc_|em_|js_|_|u_jsonp_)/.test(c);
+            });
+            if (classes.length > 0) {
+              selector += '.' + classes.join('.');
+            }
+            
+            let sibling = current;
+            let nth = 1;
+            while (sibling = sibling.previousElementSibling) {
+              if (sibling.nodeName.toLowerCase() === current.nodeName.toLowerCase()) nth++;
+            }
+            selector += `:nth-of-type(${nth})`;
+          }
+          path.unshift(selector);
+          current = current.parentNode;
+        }
+        return path.join(' > ');
+      }
+
+      window.addEventListener('click', (e) => {
+        if (window.isPerformingSyncAction) return;
+        if (!e.isTrusted) return;
+        const sel = getCssSelector(e.target);
+        if (sel) {
+          window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'click', selector: sel }).catch(() => {});
+        }
+      }, true);
+
+      window.addEventListener('focus', (e) => {
+        if (window.isPerformingSyncAction) return;
+        if (!e.isTrusted) return;
+        const sel = getCssSelector(e.target);
+        if (sel) {
+          window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'focus', selector: sel }).catch(() => {});
+        }
+      }, true);
+
+      window.addEventListener('input', (e) => {
+        if (window.isPerformingSyncAction) return;
+        if (!e.isTrusted) return;
+        const sel = getCssSelector(e.target);
+        if (sel) {
+          const isContentEditable = e.target.isContentEditable || e.target.getAttribute('contenteditable') === 'true';
+          const val = isContentEditable ? e.target.innerText : e.target.value;
+          window.onMasterEvent({
+            sourceId: window.multiControlSourceId,
+            type: 'input',
+            selector: sel,
+            value: val,
+            isContentEditable: isContentEditable
+          }).catch(() => {});
+        }
+      }, true);
+
+      window.addEventListener('keydown', (e) => {
+        if (window.isPerformingSyncAction) return;
+        if (!e.isTrusted) return;
+        if (e.key === 'Enter') {
+          const sel = getCssSelector(e.target);
+          if (sel) {
+            window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'keypress', selector: sel, key: 'Enter' }).catch(() => {});
+          }
+        }
+      }, true);
+
+      window.addEventListener('scroll', () => {
+        if (window.isPerformingSyncAction) return;
+        window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'scroll', x: window.scrollX, y: window.scrollY }).catch(() => {});
+      }, true);
+    };
+
+    // Helper to register listeners on a page
+    const setupPageSync = async (page, sourceProfileId) => {
+      const pageUrl = page.url();
+      if (!pageUrl || pageUrl.startsWith('chrome-extension://') || pageUrl.startsWith('devtools://') || pageUrl.startsWith('chrome://') || pageUrl.startsWith('about:')) {
+        return;
+      }
+      try {
+        try {
+          await page.exposeFunction('onMasterEvent', async (event) => {
+            if (!activeMultiControlSession) return;
+            const currentProfileIds = activeMultiControlSession.profileIds || [];
+            const eventSourceId = event.sourceId;
+            const targetProfileIds = currentProfileIds.filter(id => id !== eventSourceId);
+
+            for (const targetId of targetProfileIds) {
+              const targetEntry = runningBrowsers.get(targetId);
+              if (!targetEntry) continue;
+              
+              try {
+                const targetPages = await targetEntry.browser.pages();
+                const webpagePages = targetPages.filter(p => {
+                  const u = p.url();
+                  return u && !u.startsWith('chrome-extension://') && !u.startsWith('devtools://') && !u.startsWith('chrome://');
+                });
+                const targetPage = webpagePages[webpagePages.length - 1] || targetPages[0];
+                if (!targetPage) continue;
+
+                if (event.type === 'click') {
+                  await targetPage.evaluate((sel) => {
+                    window.isPerformingSyncAction = true;
+                    const el = document.querySelector(sel);
+                    if (el) {
+                      el.scrollIntoView({ block: 'center', inline: 'center' });
+                      el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                      el.focus();
+                      el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                      el.click();
+                      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                    }
+                    setTimeout(() => { window.isPerformingSyncAction = false; }, 50);
+                  }, event.selector).catch(() => {});
+                } else if (event.type === 'focus') {
+                  await targetPage.evaluate((sel) => {
+                    window.isPerformingSyncAction = true;
+                    const el = document.querySelector(sel);
+                    if (el) el.focus();
+                    setTimeout(() => { window.isPerformingSyncAction = false; }, 50);
+                  }, event.selector).catch(() => {});
+                } else if (event.type === 'input') {
+                  await targetPage.evaluate((sel, val, isCE) => {
+                    window.isPerformingSyncAction = true;
+                    const el = document.querySelector(sel);
+                    if (el) {
+                      if (isCE) {
+                        el.innerText = val;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                      } else {
+                        const prototype = Object.getPrototypeOf(el);
+                        const valueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+                        if (valueSetter) {
+                          valueSetter.call(el, val);
+                        } else {
+                          el.value = val;
+                        }
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                      }
+                    }
+                    setTimeout(() => { window.isPerformingSyncAction = false; }, 50);
+                  }, event.selector, event.value, event.isContentEditable).catch(() => {});
+                } else if (event.type === 'scroll') {
+                  await targetPage.evaluate((x, y) => {
+                    window.isPerformingSyncAction = true;
+                    if (Math.abs(window.scrollX - x) > 5 || Math.abs(window.scrollY - y) > 5) {
+                      window.scrollTo(x, y);
+                    }
+                    setTimeout(() => { window.isPerformingSyncAction = false; }, 50);
+                  }, event.x, event.y).catch(() => {});
+                } else if (event.type === 'keypress' && event.key === 'Enter') {
+                  await targetPage.evaluate((sel) => {
+                    window.isPerformingSyncAction = true;
+                    const el = document.querySelector(sel);
+                    if (el) el.focus();
+                  }, event.selector).catch(() => {});
+                  await targetPage.keyboard.press('Enter').catch(() => {});
+                  await targetPage.evaluate(() => {
+                    window.isPerformingSyncAction = false;
+                  }).catch(() => {});
+                }
+              } catch (err) {}
+            }
+          });
+        } catch (exposeErr) {
+          if (!exposeErr.message.includes('already declared')) {
+            console.error('Error exposing onMasterEvent:', exposeErr.message);
+          }
+        }
+
+        // Inject listeners immediately and on navigation
+        await page.evaluate(injectSyncListenerScript, sourceProfileId).catch(() => {});
+        await page.evaluateOnNewDocument(injectSyncListenerScript, sourceProfileId).catch(() => {});
+
+        // Listen for navigation to sync url (avoid duplicates)
+        if (!page.hasMultiControlSync) {
+          page.hasMultiControlSync = true;
+          page.on('framenavigated', async (frame) => {
+            if (!activeMultiControlSession) return;
+            if (page.isPerformingSyncNavigation) return;
+            if (frame === page.mainFrame()) {
+              const url = page.url();
+              if (url && !url.startsWith('chrome://') && !url.startsWith('about:') && !url.startsWith('chrome-extension://')) {
+                const currentProfileIds = activeMultiControlSession.profileIds || [];
+                const targetProfileIds = currentProfileIds.filter(id => id !== sourceProfileId);
+                for (const targetId of targetProfileIds) {
+                  const targetEntry = runningBrowsers.get(targetId);
+                  if (!targetEntry) continue;
+                  try {
+                    const targetPages = await targetEntry.browser.pages();
+                    const webpagePages = targetPages.filter(p => {
+                      const u = p.url();
+                      return u && !u.startsWith('chrome-extension://') && !u.startsWith('devtools://') && !u.startsWith('chrome://');
+                    });
+                    const targetPage = webpagePages[webpagePages.length - 1] || targetPages[0];
+                    if (targetPage && targetPage.url() !== url) {
+                      targetPage.isPerformingSyncNavigation = true;
+                      try {
+                        await targetPage.goto(url);
+                      } catch (err) {
+                        // ignore
+                      } finally {
+                        setTimeout(() => {
+                          targetPage.isPerformingSyncNavigation = false;
+                        }, 2500);
+                      }
+                    }
+                  } catch (err) {}
+                }
+              }
+            }
+          });
+        }
+
+      } catch (e) {
+        console.error('Error setting up sync for page:', e.message);
+      }
+    };
+
+    // Set up listeners for ALL profile contexts in the group
+    for (const profileId of profileIds) {
+      const entry = runningBrowsers.get(profileId);
+      if (!entry) continue;
+
+      const pages = await entry.browser.pages();
+      for (const page of pages) {
+        await setupPageSync(page, profileId);
+      }
+
+      const targetcreatedListener = async (target) => {
+        if (!activeMultiControlSession) return;
+        if (target.type() === 'page') {
+          try {
+            const page = await target.page();
+            if (page) {
+              await setupPageSync(page, profileId);
+            }
+          } catch (err) {}
+        }
+      };
+
+      const targetchangedListener = async (target) => {
+        if (!activeMultiControlSession) return;
+        if (target.type() === 'page') {
+          try {
+            const page = await target.page();
+            if (page) {
+              await setupPageSync(page, profileId);
+            }
+          } catch (err) {}
+        }
+      };
+
+      entry.browser.on('targetcreated', targetcreatedListener);
+      entry.browser.on('targetchanged', targetchangedListener);
+
+      activeMultiControlListeners.set(profileId, {
+        targetcreated: targetcreatedListener,
+        targetchanged: targetchangedListener
+      });
+    }
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+async function stopMultiControl() {
+  activeMultiControlSession = null;
+
+  // Clean up browser-level listeners to prevent memory leaks and duplicate triggers
+  for (const [profileId, listeners] of activeMultiControlListeners.entries()) {
+    const entry = runningBrowsers.get(profileId);
+    if (entry && entry.browser) {
+      if (listeners.targetcreated) {
+        entry.browser.off('targetcreated', listeners.targetcreated);
+      }
+      if (listeners.targetchanged) {
+        entry.browser.off('targetchanged', listeners.targetchanged);
+      }
+    }
+  }
+  activeMultiControlListeners.clear();
+
+  return { success: true };
+}
+
+function getMultiControlStatus() {
+  return activeMultiControlSession;
+}
+
 module.exports = {
   launchProfile,
   closeProfile,
@@ -666,4 +1015,7 @@ module.exports = {
   getRunningProfiles,
   isRunning,
   closeAll,
+  startMultiControl,
+  stopMultiControl,
+  getMultiControlStatus,
 };
