@@ -1,92 +1,26 @@
 import { state } from './state.js';
 import { api, connectWS } from './api.js';
+
 import {
-  openProfile,
-  closeProfile,
-  duplicateProfile,
-  deleteProfile,
-  regenFingerprint,
-  showDetail,
-  toggleSelect,
-  toggleGroupSelect,
-  openGroupsModal,
-  closeGroupsModal
-} from './modals.js';
-import { openScriptEditor } from './automation.js';
+  esc,
+  toast,
+  ensureProgressOverlay,
+  setProgressOverlay,
+  hideProgressOverlay,
+  getProgressInterval,
+  setProgressInterval
+} from './utils.js';
 
-let progressInterval = null;
+export {
+  esc,
+  toast,
+  ensureProgressOverlay,
+  setProgressOverlay,
+  hideProgressOverlay,
+  getProgressInterval,
+  setProgressInterval
+};
 
-export function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s || '';
-  return d.innerHTML;
-}
-
-export function toast(msg, type = 'info') {
-  const c = document.getElementById('toastContainer');
-  if (!c) return;
-  const t = document.createElement('div');
-  t.className = `toast ${type}`;
-  t.textContent = msg;
-  c.appendChild(t);
-  const duration = type === 'error' ? 6000 : 3500;
-  setTimeout(() => { 
-    t.style.opacity = '0'; 
-    setTimeout(() => t.remove(), 300); 
-  }, duration);
-}
-
-export function ensureProgressOverlay() {
-  let overlay = document.getElementById('progressOverlay');
-  if (overlay) return overlay;
-  overlay = document.createElement('div');
-  overlay.id = 'progressOverlay';
-  overlay.className = 'progress-overlay';
-  overlay.innerHTML = `
-    <div class="progress-card">
-      <div class="progress-title">Đang xử lý...</div>
-      <div class="progress-subtitle">Vui lòng đợi</div>
-      <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
-      <div class="progress-meta"><span class="progress-percent">0%</span></div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  return overlay;
-}
-
-export function setProgressOverlay(message, subtext, percent) {
-  const overlay = ensureProgressOverlay();
-  overlay.classList.add('active');
-  overlay.querySelector('.progress-title').textContent = message;
-  overlay.querySelector('.progress-subtitle').textContent = subtext;
-  const fill = overlay.querySelector('.progress-fill');
-  const pct = Math.min(100, Math.max(0, percent));
-  if (fill) fill.style.width = pct + '%';
-  const percentEl = overlay.querySelector('.progress-percent');
-  if (percentEl) percentEl.textContent = pct + '%';
-}
-
-export function hideProgressOverlay() {
-  const overlay = document.getElementById('progressOverlay');
-  if (!overlay) return;
-  overlay.classList.remove('active');
-  const fill = overlay.querySelector('.progress-fill');
-  if (fill) fill.style.width = '0%';
-  const percentEl = overlay.querySelector('.progress-percent');
-  if (percentEl) percentEl.textContent = '0%';
-  if (progressInterval) {
-    clearInterval(progressInterval);
-    progressInterval = null;
-  }
-}
-
-export function getProgressInterval() {
-  return progressInterval;
-}
-
-export function setProgressInterval(interval) {
-  progressInterval = interval;
-}
 
 export function parseProxyHost(proxy) {
   if (!proxy) return '';
@@ -212,6 +146,13 @@ export function renderProfiles() {
         }
       }
 
+      let tagsHtml = '';
+      if (p.tags && p.tags.trim()) {
+        tagsHtml = p.tags.split(',').map(tag => {
+          return `<span class="meta-tag tag" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); font-weight: 500;">🏷️ ${esc(tag.trim())}</span>`;
+        }).join('');
+      }
+
       return `
         <div class="${cardClass}" data-id="${p.id}">
           <div class="card-top">
@@ -228,6 +169,7 @@ export function renderProfiles() {
             <span class="meta-tag">${fp.screen ? fp.screen.width + 'x' + fp.screen.height : '1920x1080'}</span>
             ${p.proxy ? `<span class="meta-tag proxy">${esc(p.proxyIp || parseProxyHost(p.proxy))}</span>` : ''}
             ${categoryBadge}
+            ${tagsHtml}
             <span class="meta-tag open-count" style="color: #60a5fa; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.2);">🚀 Mở: ${p.openCount || 0} lần</span>
             ${p.notes ? `<span class="meta-tag notes">📝 ${esc(p.notes.substring(0, 20))}</span>` : ''}
           </div>
@@ -412,15 +354,24 @@ export function initUI() {
   // Bind manage groups button
   const btnManageGroups = document.getElementById('btnManageGroups');
   if (btnManageGroups) {
-    btnManageGroups.addEventListener('click', openGroupsModal);
+    btnManageGroups.addEventListener('click', async () => {
+      const { openGroupsModal } = await import('./modals.js');
+      openGroupsModal();
+    });
   }
   const btnCloseGroupsModal = document.getElementById('btnCloseGroupsModal');
   if (btnCloseGroupsModal) {
-    btnCloseGroupsModal.addEventListener('click', closeGroupsModal);
+    btnCloseGroupsModal.addEventListener('click', async () => {
+      const { closeGroupsModal } = await import('./modals.js');
+      closeGroupsModal();
+    });
   }
   const btnConfirmGroups = document.getElementById('btnConfirmGroups');
   if (btnConfirmGroups) {
-    btnConfirmGroups.addEventListener('click', closeGroupsModal);
+    btnConfirmGroups.addEventListener('click', async () => {
+      const { closeGroupsModal } = await import('./modals.js');
+      closeGroupsModal();
+    });
   }
   const btnSelectAllGroups = document.getElementById('btnSelectAllGroups');
   if (btnSelectAllGroups) {
