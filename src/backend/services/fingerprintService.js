@@ -719,7 +719,10 @@ function buildFingerprintScript(fp) {
                 const originalQuery = navigator.permissions.query.bind(navigator.permissions);
                 navigator.permissions.query = function(desc) {
                     if (desc && desc.name) {
-                        const allowed = ['geolocation', 'notifications', 'push', 'midi', 'camera', 'microphone'];
+                        if (desc.name === 'geolocation') {
+                            return Promise.resolve({ state: 'granted', onchange: null, name: desc.name });
+                        }
+                        const allowed = ['notifications', 'push', 'midi', 'camera', 'microphone'];
                         if (allowed.includes(desc.name)) {
                             return Promise.resolve({ state: 'prompt', onchange: null, name: desc.name });
                         }
