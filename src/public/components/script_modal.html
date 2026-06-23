@@ -37,6 +37,13 @@ await page.screenshot({ path: 'screenshot.png' });</code></pre>
           <label for="scriptName">Tên Script</label>
           <input type="text" id="scriptName" placeholder="VD: Login Facebook">
         </div>
+        <div class="form-group" style="background: rgba(99, 102, 241, 0.05); border: 1px dashed rgba(99, 102, 241, 0.4); padding: 10px; border-radius: 6px; margin-bottom: 12px;">
+          <label for="aiPrompt" style="font-weight: bold; color: var(--accent);">✍️ Trợ lý ảo AI (Viết kịch bản bằng tiếng Việt)</label>
+          <div style="display:flex; gap:8px; margin-top:6px;">
+            <input type="text" id="aiPrompt" placeholder="VD: Mở trang google.com, tìm kiếm 'chrome profile manager' và click kết quả đầu tiên" autocomplete="off" style="margin-bottom:0;">
+            <button class="btn btn-primary" id="btnGenerateAIScript" type="button" style="width:140px; padding:0 12px; height:auto; background-color: var(--accent);">Tạo Code AI</button>
+          </div>
+        </div>
         <div class="form-group">
           <label for="scriptCode">Code</label>
           <textarea id="scriptCode" class="code-editor" rows="15" placeholder="// Viết script ở đây..."
