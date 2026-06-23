@@ -27,11 +27,11 @@ router.get('/', (req, res) => {
       const q = `%${search.trim()}%`;
       stmt = db.prepare(`
         SELECT * FROM profiles
-        WHERE name LIKE ? OR id LIKE ? OR notes LIKE ?
+        WHERE name LIKE ? OR id LIKE ? OR notes LIKE ? OR tags LIKE ?
         ORDER BY createdAt DESC
         LIMIT ? OFFSET ?
       `);
-      profiles = stmt.all(q, q, q, Number(limit), Number(offset));
+      profiles = stmt.all(q, q, q, q, Number(limit), Number(offset));
     } else {
       stmt = db.prepare('SELECT * FROM profiles ORDER BY createdAt DESC LIMIT ? OFFSET ?');
       profiles = stmt.all(Number(limit), Number(offset));
@@ -60,6 +60,16 @@ router.get('/', (req, res) => {
 
 
 
+// ==================== FINGERPRINT SAMPLE for manual selection ====
+router.get('/fingerprint-sample', (req, res) => {
+  try {
+    const fingerprint = generateFingerprint();
+    res.json({ success: true, data: fingerprint });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== GET single profile ====================
 router.get('/:id', (req, res) => {
   try {
@@ -81,7 +91,7 @@ router.get('/:id', (req, res) => {
 // ==================== CREATE profile ====================
 router.post('/', (req, res) => {
   try {
-    const { name, notes, proxy, proxyType, fingerprint: customFingerprint, iconBase64 } = req.body;
+    const { name, notes, proxy, proxyType, fingerprint: customFingerprint, iconBase64, tags, proxyLat, proxyLon } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, error: 'Name is required' });
     }
@@ -93,10 +103,11 @@ router.post('/', (req, res) => {
 
     const proxyCategory = (proxy && proxyType !== 'none') ? 'undetermined' : '';
     const proxyLastIp = req.body.proxyIp || '';
+    const finalTags = Array.isArray(tags) ? tags.join(',') : (tags ? String(tags).trim() : '');
 
     const stmt = db.prepare(`
-      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, rotationUrl, proxyCategory, proxyLastIp, proxyUnchangedChecks)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, rotationUrl, proxyCategory, proxyLastIp, proxyUnchangedChecks, tags, proxyLat, proxyLon)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       id,
@@ -111,7 +122,10 @@ router.post('/', (req, res) => {
       '',
       proxyCategory,
       proxyLastIp,
-      0
+      0,
+      finalTags,
+      proxyLat || '',
+      proxyLon || ''
     );
 
     // Create the user-data directory
@@ -129,29 +143,20 @@ router.post('/', (req, res) => {
   }
 });
 
-// ==================== FINGERPRINT SAMPLE for manual selection ====
-router.get('/fingerprint-sample', (req, res) => {
-  try {
-    const fingerprint = generateFingerprint();
-    res.json({ success: true, data: fingerprint });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // ==================== CREATE multiple profiles ====================
 router.post('/bulk-create', (req, res) => {
   try {
-    const { count = 1, namePrefix = 'Profile', startIndex = 1, proxy, proxyType } = req.body;
+    const { count = 1, namePrefix = 'Profile', startIndex = 1, proxy, proxyType, tags, proxyLat, proxyLon } = req.body;
     const start = Number(startIndex);
     const created = [];
 
     const proxyCategory = (proxy && proxyType !== 'none') ? 'undetermined' : '';
     const proxyLastIp = req.body.proxyIp || '';
+    const finalTags = Array.isArray(tags) ? tags.join(',') : (tags ? String(tags).trim() : '');
 
     const stmt = db.prepare(`
-      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, proxyCategory, proxyLastIp, proxyUnchangedChecks)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, proxyCategory, proxyLastIp, proxyUnchangedChecks, tags, proxyLat, proxyLon)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const insertMany = db.transaction((count) => {
@@ -177,7 +182,10 @@ router.post('/bulk-create', (req, res) => {
           JSON.stringify(fingerprint),
           proxyCategory,
           proxyLastIp,
-          0
+          0,
+          finalTags,
+          proxyLat || '',
+          proxyLon || ''
         );
         fs.mkdirSync(path.join(__dirname, '..', '..', 'profiles', id), { recursive: true });
         created.push({ id, name });
@@ -223,6 +231,12 @@ router.put('/:id', (req, res) => {
       proxyLastIp = proxyIpParam;
     }
 
+    const finalTags = req.body.tags !== undefined
+      ? (Array.isArray(req.body.tags) ? req.body.tags.join(',') : String(req.body.tags).trim())
+      : null;
+    const proxyLatParam = req.body.proxyLat !== undefined ? req.body.proxyLat : null;
+    const proxyLonParam = req.body.proxyLon !== undefined ? req.body.proxyLon : null;
+
     const updateStmt = db.prepare(`
       UPDATE profiles SET
         name = COALESCE(?, name),
@@ -237,6 +251,9 @@ router.put('/:id', (req, res) => {
         proxyLastIp = ?,
         proxyUnchangedChecks = ?,
         fingerprint = CASE WHEN ? IS NULL THEN fingerprint ELSE ? END,
+        tags = CASE WHEN ? IS NULL THEN tags ELSE ? END,
+        proxyLat = CASE WHEN ? IS NULL THEN proxyLat ELSE ? END,
+        proxyLon = CASE WHEN ? IS NULL THEN proxyLon ELSE ? END,
         updatedAt = datetime('now')
       WHERE id = ?
     `);
@@ -250,6 +267,9 @@ router.put('/:id', (req, res) => {
       proxyLastIp,
       proxyUnchangedChecks,
       fingerprintParam, fingerprintParam,
+      finalTags, finalTags,
+      proxyLatParam, proxyLatParam,
+      proxyLonParam, proxyLonParam,
       req.params.id);
 
     res.json({ success: true, data: { id: req.params.id } });
@@ -305,8 +325,8 @@ router.post('/:id/duplicate', async (req, res) => {
     }
 
     const insertStmt = db.prepare(`
-      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, proxyCategory, proxyLastIp, proxyUnchangedChecks)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, notes, proxy, proxyType, proxyIp, proxyCountry, proxyTimezone, fingerprint, proxyCategory, proxyLastIp, proxyUnchangedChecks, tags, proxyLat, proxyLon)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     insertStmt.run(
@@ -321,7 +341,10 @@ router.post('/:id/duplicate', async (req, res) => {
       sourceProfile.fingerprint,
       sourceProfile.proxyCategory || '',
       sourceProfile.proxyLastIp || '',
-      sourceProfile.proxyUnchangedChecks || 0
+      sourceProfile.proxyUnchangedChecks || 0,
+      sourceProfile.tags || '',
+      sourceProfile.proxyLat || '',
+      sourceProfile.proxyLon || ''
     );
 
     res.json({ success: true, data: { id: newId, name: newName } });
