@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Tiện ích Facebook",
   "version": "1.0",
-  "description": "Extension cho phép lấy/dán cookie và lấy mã bảo mật 2FA.",
+  "description": "Extension cho phép lấy/dán cookie và lấy mã bảo mật 2FA.(by quất đẹp trai)",
   "permissions": [
     "cookies",
     "activeTab",
