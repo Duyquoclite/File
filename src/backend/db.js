@@ -108,6 +108,24 @@ try {
   // Already exists
 }
 
+try {
+  db.exec(`ALTER TABLE profiles ADD COLUMN tags TEXT DEFAULT ''`);
+} catch (e) {
+  // Already exists
+}
+
+try {
+  db.exec(`ALTER TABLE profiles ADD COLUMN proxyLat TEXT DEFAULT ''`);
+} catch (e) {
+  // Already exists
+}
+
+try {
+  db.exec(`ALTER TABLE profiles ADD COLUMN proxyLon TEXT DEFAULT ''`);
+} catch (e) {
+  // Already exists
+}
+
 // Sync profiles function
 db.syncProfiles = function() {
   try {
