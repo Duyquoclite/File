@@ -498,5 +498,131 @@ router.get('/status/running', (req, res) => {
   res.json({ success: true, data: runningIds });
 });
 
+const cookieService = require('../services/cookieService');
+
+// ==================== GET Profile Cookies ====================
+router.get('/:id/cookies', (req, res) => {
+  const profileId = req.params.id;
+  const { domain } = req.query;
+  
+  try {
+    const stmt = db.prepare('SELECT id FROM profiles WHERE id = ?');
+    const profile = stmt.get(profileId);
+    if (!profile) {
+      return res.status(404).json({ success: false, error: 'Profile not found' });
+    }
+
+    if (domain) {
+      const data = cookieService.getCookiesForDomain(profileId, domain);
+      res.json({ success: true, data });
+    } else {
+      const data = cookieService.getCookiesList(profileId);
+      res.json({ success: true, data });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== PUT/SAVE Profile Cookies ====================
+router.put('/:id/cookies', (req, res) => {
+  const profileId = req.params.id;
+  const { domain, format, content } = req.body;
+  
+  if (!domain || !format || content === undefined) {
+    return res.status(400).json({ success: false, error: 'domain, format and content are required' });
+  }
+
+  try {
+    const stmt = db.prepare('SELECT id FROM profiles WHERE id = ?');
+    const profile = stmt.get(profileId);
+    if (!profile) {
+      return res.status(404).json({ success: false, error: 'Profile not found' });
+    }
+
+    // Safety check: is profile running?
+    if (chromeService.isRunning(profileId)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Trình duyệt đang chạy. Vui lòng đóng trình duyệt trước khi cập nhật cookie.' 
+      });
+    }
+
+    let parsedCookies = [];
+    if (format === 'json') {
+      try {
+        const rawList = JSON.parse(content);
+        if (!Array.isArray(rawList)) {
+          return res.status(400).json({ success: false, error: 'JSON format must be a list of cookie objects' });
+        }
+        
+        parsedCookies = rawList.map(c => {
+          if (!c.name || c.value === undefined) {
+            throw new Error('Mỗi cookie trong JSON phải có "name" và "value"');
+          }
+          // Translate keys if standard EditThisCookie or similar is used
+          const sameSiteMap = {
+            'no_restriction': 0,
+            'lax': 1,
+            'strict': 2,
+            'unspecified': -1
+          };
+          let sameSiteVal = 1;
+          if (c.sameSite !== undefined) {
+            if (typeof c.sameSite === 'string') {
+              sameSiteVal = sameSiteMap[c.sameSite.toLowerCase()] !== undefined ? sameSiteMap[c.sameSite.toLowerCase()] : 1;
+            } else {
+              sameSiteVal = c.sameSite;
+            }
+          }
+
+          return {
+            name: c.name,
+            value: c.value,
+            domain: c.domain || c.host || domain,
+            path: c.path || '/',
+            secure: c.secure !== undefined ? c.secure : true,
+            httpOnly: c.httpOnly !== undefined ? c.httpOnly : false,
+            sameSite: sameSiteVal,
+            expires: c.expirationDate || c.expires || c.expires_utc
+          };
+        });
+      } catch (err) {
+        return res.status(400).json({ success: false, error: 'Lỗi cú pháp JSON: ' + err.message });
+      }
+    } else if (format === 'raw') {
+      // Parse raw name=value string
+      const pairs = content.split(';');
+      for (let pair of pairs) {
+        pair = pair.trim();
+        if (!pair) continue;
+        const eqIdx = pair.indexOf('=');
+        if (eqIdx === -1) continue;
+        const name = pair.slice(0, eqIdx).trim();
+        const value = pair.slice(eqIdx + 1).trim();
+        if (name) {
+          parsedCookies.push({
+            name,
+            value,
+            domain,
+            path: '/',
+            secure: true,
+            httpOnly: false,
+            sameSite: 1,
+            expires: Math.floor(Date.now() / 1000) + 365 * 24 * 3600
+          });
+        }
+      }
+    } else {
+      return res.status(400).json({ success: false, error: 'Invalid format type. Expected "json" or "raw"' });
+    }
+
+    cookieService.saveCookiesForDomain(profileId, domain, parsedCookies);
+    res.json({ success: true, message: 'Đã cập nhật cookie thành công!' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
 
