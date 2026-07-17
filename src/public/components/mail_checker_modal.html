@@ -1,0 +1,60 @@
+<!-- ====== Mail Checker Modal ====== -->
+<div class="modal-overlay" id="mailCheckerModal">
+  <div class="modal" style="max-width: 1200px; width: 95%; height: 88vh; display: flex; flex-direction: column;">
+    <div class="modal-header">
+      <h2>📬 Check Thư Hotmail / Outlook Hàng Loạt Bằng Token</h2>
+      <button class="btn-close" id="btnCloseMailCheckerModal">✕</button>
+    </div>
+    <div class="modal-body" style="flex: 1; display: flex; overflow: hidden; padding: 16px; gap: 16px; position: relative;">
+      
+      <!-- Column 1: Accounts Sidebar -->
+      <div style="width: 280px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.15); flex-shrink: 0;">
+        <div style="padding: 10px 12px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+          <span style="font-weight: 600; font-size: 0.85rem;">Danh sách tài khoản</span>
+          <button id="btnImportAccounts" class="btn btn-primary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;">➕ Nhập List</button>
+        </div>
+        <div id="accountsListContainer" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column;">
+          <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.8rem;">
+            Chưa có tài khoản. Bấm "Nhập List" để dán danh sách tài khoản.
+          </div>
+        </div>
+      </div>
+
+      <!-- Column 2: Emails List -->
+      <div style="width: 320px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.1); flex-shrink: 0;">
+        <div style="padding: 10px 12px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+          <span>Hộp thư đến (Inbox)</span>
+          <span id="mailCountBadge" class="meta-tag" style="background: rgba(99,102,241,0.15); color: var(--accent); font-size: 0.75rem;">0 thư</span>
+        </div>
+        <div id="mailboxListContainer" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column;">
+          <div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 0.8rem;">
+            Chọn một tài khoản ở bên trái để tải hộp thư.
+          </div>
+        </div>
+      </div>
+
+      <!-- Column 3: Email Content Reader -->
+      <div style="flex: 1; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.15);">
+        <div style="padding: 10px 12px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85rem; flex-shrink: 0;">
+          Chi tiết nội dung thư
+        </div>
+        <div id="mailDetailContainer" style="flex: 1; overflow-y: auto; padding: 16px; font-size: 0.85rem; line-height: 1.6; color: var(--text-secondary); background: var(--bg-card);">
+          <div style="height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); text-align: center;">
+            Chọn một email từ danh sách ở giữa để đọc chi tiết.
+          </div>
+        </div>
+      </div>
+
+      <!-- Overlay Import Box: Absolute positioning inside modal-body -->
+      <div id="importOverlay" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15,15,35,0.95); z-index: 10; padding: 24px; flex-direction: column; gap: 12px; justify-content: center;">
+        <h3 style="margin: 0; font-size: 1rem; color: var(--text);">Dán danh sách tài khoản (Định dạng: email|pass|token|client_id)</h3>
+        <textarea id="txtImportList" placeholder="Dán văn bản có định dạng:&#10;email|password|token|client_id&#10;&#10;Ví dụ:&#10;FunchessRehbock833@hotmail.com|v9neOGr9QG|M.C542_BL...|9e5f94bc-e8a4-4e73-b8be-63364c29d753" style="flex: 1; width: 100%; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 0.8rem; line-height: 1.4; resize: none; box-sizing: border-box;"></textarea>
+        <div style="display: flex; gap: 12px; justify-content: flex-end; flex-shrink: 0;">
+          <button id="btnCancelImport" class="btn btn-secondary" style="padding: 6px 16px; font-size: 0.85rem; cursor: pointer;">Hủy</button>
+          <button id="btnConfirmImport" class="btn btn-primary" style="padding: 6px 16px; font-size: 0.85rem; cursor: pointer;">Xác nhận & Lọc</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
