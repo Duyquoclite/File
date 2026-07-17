@@ -38,7 +38,7 @@ export function showMessageModal({ title = 'Thông báo', message = '', okText =
   const msgEl = document.getElementById('messageModalMessage');
   const okBtn = document.getElementById('messageModalOk');
   if (titleEl) titleEl.textContent = title;
-  if (msgEl) msgEl.textContent = message;
+  if (msgEl) msgEl.innerHTML = message;
   if (okBtn) okBtn.textContent = okText;
   openModal('messageModal');
 }
@@ -1421,4 +1421,392 @@ export function setupModalEventListeners() {
       }
     };
   }
+
+  // Mail Checker Modal events
+  const btnMailChecker = document.getElementById('btnMailChecker');
+  if (btnMailChecker) {
+    btnMailChecker.onclick = () => {
+      openModal('mailCheckerModal');
+      // Load saved raw text if any
+      const savedRawText = localStorage.getItem('mailCheckerRawText') || '';
+      const txtImportList = document.getElementById('txtImportList');
+      if (txtImportList) txtImportList.value = savedRawText;
+      
+      // Auto-parse on load
+      if (savedRawText) {
+        renderParsedAccounts(savedRawText);
+      }
+    };
+  }
+
+  const btnCloseMailCheckerModal = document.getElementById('btnCloseMailCheckerModal');
+  if (btnCloseMailCheckerModal) btnCloseMailCheckerModal.onclick = () => closeModal('mailCheckerModal');
+
+  // Import Overlay triggers
+  const btnImportAccounts = document.getElementById('btnImportAccounts');
+  const importOverlay = document.getElementById('importOverlay');
+  const btnCancelImport = document.getElementById('btnCancelImport');
+  const btnConfirmImport = document.getElementById('btnConfirmImport');
+
+  if (btnImportAccounts && importOverlay) {
+    btnImportAccounts.onclick = () => {
+      importOverlay.style.display = 'flex';
+      const savedRawText = localStorage.getItem('mailCheckerRawText') || '';
+      const txtImportList = document.getElementById('txtImportList');
+      if (txtImportList) txtImportList.value = savedRawText;
+    };
+  }
+
+  if (btnCancelImport && importOverlay) {
+    btnCancelImport.onclick = () => {
+      importOverlay.style.display = 'none';
+    };
+  }
+
+  if (btnConfirmImport && importOverlay) {
+    btnConfirmImport.onclick = () => {
+      const txtImportList = document.getElementById('txtImportList');
+      const rawText = txtImportList ? txtImportList.value : '';
+      localStorage.setItem('mailCheckerRawText', rawText);
+      
+      renderParsedAccounts(rawText);
+      importOverlay.style.display = 'none';
+    };
+  }
+
+  // Render accounts list function
+  function renderParsedAccounts(rawText) {
+    const listContainer = document.getElementById('accountsListContainer');
+    if (!listContainer) return;
+
+    const lines = rawText.split('\n');
+    const accounts = [];
+    let lineIdx = 0;
+    
+    for (let line of lines) {
+      lineIdx++;
+      line = line.trim();
+      if (!line || line.startsWith('#')) continue;
+      if (line.includes('|')) {
+        const parts = line.split('|');
+        if (parts.length >= 3) {
+          const email = parts[0].trim();
+          const password = parts[1].trim();
+          const token = parts[2].trim();
+          const clientId = parts[3] ? parts[3].trim() : '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+          if (email && token) {
+            accounts.push({ index: lineIdx, email, password, token, clientId });
+          }
+        }
+      }
+    }
+
+    if (accounts.length === 0) {
+      listContainer.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:0.8rem;">Không tìm thấy tài khoản hợp lệ. Bấm "Nhập List" để thử lại.</div>';
+      return;
+    }
+
+    listContainer.innerHTML = accounts.map((acc, index) => {
+      return `
+        <div class="account-item" data-index="${index}" style="padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 4px;">
+          <div style="font-weight: 600; font-size: 0.8rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            ${index + 1}. ${esc(acc.email)}
+          </div>
+          <div style="font-size: 0.7rem; color: var(--text-muted);">
+            <span>Pass: ${esc(acc.password)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Wire click listener to each account
+    listContainer.querySelectorAll('.account-item').forEach(item => {
+      // Hover effects
+      item.addEventListener('mouseenter', () => {
+        if (!item.classList.contains('selected')) {
+          item.style.background = 'rgba(255,255,255,0.03)';
+        }
+      });
+      item.addEventListener('mouseleave', () => {
+        if (!item.classList.contains('selected')) {
+          item.style.background = 'transparent';
+        }
+      });
+
+      item.onclick = async () => {
+        // Highlight selection
+        listContainer.querySelectorAll('.account-item').forEach(el => {
+          el.classList.remove('selected');
+          el.style.background = 'transparent';
+          el.style.borderLeft = 'none';
+        });
+        item.classList.add('selected');
+        item.style.background = 'rgba(99,102,241,0.08)';
+        item.style.borderLeft = '3px solid var(--accent)';
+
+        const accIndex = parseInt(item.dataset.index);
+        const account = accounts[accIndex];
+        
+        // Load mailbox for this account
+        await loadMailboxForAccount(account);
+      };
+    });
+  }
+
+  // Load mailbox function
+  async function loadMailboxForAccount(account) {
+    const listContainer = document.getElementById('mailboxListContainer');
+    const badge = document.getElementById('mailCountBadge');
+    const detailContainer = document.getElementById('mailDetailContainer');
+    
+    if (listContainer) listContainer.innerHTML = '<div style="padding:24px; text-align:center; color:var(--text-muted);">Đang kết nối API Microsoft...</div>';
+    if (detailContainer) detailContainer.innerHTML = '<div style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-muted); text-align:center;">Chọn một email từ danh sách ở giữa để đọc chi tiết.</div>';
+    if (badge) badge.textContent = '0 thư';
+
+    try {
+      const response = await api('/profiles/mail-checker/list', {
+        method: 'POST',
+        body: { token: account.token, clientId: account.clientId }
+      });
+
+      if (!response.success) {
+        if (listContainer) listContainer.innerHTML = `<div style="padding:24px; color:#ea868f; text-align:center; font-weight:bold; font-size:0.8rem;">${esc(response.error)}</div>`;
+        return;
+      }
+
+      const activeAccessToken = response.accessToken;
+      const activeApiUsed = response.apiUsed;
+      const emails = response.emails || [];
+      if (badge) badge.textContent = `${emails.length} thư`;
+
+      if (emails.length === 0) {
+        if (listContainer) listContainer.innerHTML = '<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:0.8rem;">Hộp thư trống (Inbox is empty)</div>';
+        return;
+      }
+
+      listContainer.innerHTML = emails.map(email => {
+        const fromAddr = email.from?.emailAddress?.address || 'Không rõ người gửi';
+        const receivedDate = email.receivedDateTime ? new Date(email.receivedDateTime).toLocaleString('vi-VN') : 'Không rõ ngày';
+        return `
+          <div class="mail-item" data-id="${email.id}" style="padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 4px;">
+            <div style="display:flex; justify-content:space-between; font-weight:600; font-size:0.8rem; color:var(--text);">
+              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;">${esc(fromAddr)}</span>
+              <span style="font-size:0.7rem; color:var(--text-muted); font-weight:normal;">${receivedDate}</span>
+            </div>
+            <div style="font-size:0.8rem; font-weight:500; color:var(--text-secondary); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
+              ${esc(email.subject || '(Không có tiêu đề)')}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Wire click handler to each mail item
+      listContainer.querySelectorAll('.mail-item').forEach(item => {
+        // Hover effects
+        item.addEventListener('mouseenter', () => {
+          if (!item.classList.contains('selected')) {
+            item.style.background = 'rgba(255,255,255,0.03)';
+          }
+        });
+        item.addEventListener('mouseleave', () => {
+          if (!item.classList.contains('selected')) {
+            item.style.background = 'transparent';
+          }
+        });
+
+        item.onclick = async () => {
+          // Highlight selected item
+          listContainer.querySelectorAll('.mail-item').forEach(el => {
+            el.classList.remove('selected');
+            el.style.background = 'transparent';
+            el.style.borderLeft = 'none';
+          });
+          item.classList.add('selected');
+          item.style.background = 'rgba(99,102,241,0.08)';
+          item.style.borderLeft = '3px solid var(--accent)';
+
+          const messageId = item.dataset.id;
+          if (detailContainer) detailContainer.innerHTML = '<div style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-muted); text-align:center;">Đang tải nội dung thư...</div>';
+
+          try {
+            const detailRes = await api('/profiles/mail-checker/detail', {
+              method: 'POST',
+              body: { accessToken: activeAccessToken, messageId, apiUsed: activeApiUsed }
+            });
+
+            if (!detailRes.success) {
+              if (detailContainer) detailContainer.innerHTML = `<div style="color:#ea868f; padding:16px; font-size:0.8rem;">Lỗi: ${esc(detailRes.error)}</div>`;
+              return;
+            }
+
+            // Display subject and sanitized HTML body inside iframe to prevent layout leakage
+            if (detailContainer) {
+              detailContainer.innerHTML = `
+                <div style="margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+                  <h3 style="font-size:1rem; font-weight:700; color:var(--text); margin-bottom:4px;">${esc(detailRes.subject)}</h3>
+                </div>
+                <iframe id="mailBodyIframe" style="width:100%; border:none; height:450px; background:white; border-radius:6px;" sandbox="allow-same-origin"></iframe>
+              `;
+
+              const iframe = document.getElementById('mailBodyIframe');
+              if (iframe) {
+                const doc = iframe.contentDocument || iframe.contentWindow.document;
+                doc.open();
+                doc.write(detailRes.body || '<div style="padding:20px; font-family:sans-serif; color:#333;">Thư này không có nội dung.</div>');
+                doc.close();
+              }
+            }
+
+          } catch (err) {
+            if (detailContainer) detailContainer.innerHTML = `<div style="color:#ea868f; padding:16px; font-size:0.8rem;">Gặp lỗi: ${esc(err.message)}</div>`;
+          }
+        };
+      });
+
+    } catch (err) {
+      if (listContainer) listContainer.innerHTML = `<div style="padding:24px; color:#ea868f; text-align:center; font-weight:bold; font-size:0.8rem;">Lỗi kết nối: ${esc(err.message)}</div>`;
+    }
+  }
 }
+
+export async function checkFbGroupStatus(groupKey, event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+
+  const groupProfiles = state.profiles.filter(p => {
+    const pk = p.proxy && p.proxy.trim() ? p.proxy.trim() : 'no-proxy';
+    return pk === groupKey;
+  });
+
+  if (groupProfiles.length === 0) {
+    toast('Không có profile nào trong nhóm này', 'info');
+    return;
+  }
+
+  const confirmCheck = await showConfirm({
+    title: '🔍 Xác nhận kiểm tra',
+    message: `Bạn có muốn kiểm tra trạng thái Facebook của ${groupProfiles.length} profile trong nhóm này không?`,
+    confirmText: 'Bắt đầu',
+    cancelText: 'Hủy'
+  });
+  if (!confirmCheck) return;
+
+  const total = groupProfiles.length;
+  setProgressOverlay('Đang kiểm tra trạng thái Facebook...', `Đang chuẩn bị kiểm tra (0/${total})...`, 0);
+
+  const results = [];
+
+  for (let i = 0; i < total; i++) {
+    const profile = groupProfiles[i];
+    const percent = Math.round((i / total) * 100);
+    
+    setProgressOverlay(
+      'Đang kiểm tra trạng thái Facebook...',
+      `Đang check profile ${i + 1}/${total}: ${profile.name}...`,
+      percent
+    );
+
+    try {
+      const response = await api(`/profiles/${profile.id}/check-fb-status`, {
+        method: 'POST'
+      });
+
+      if (response && response.success && response.data) {
+        results.push(response.data);
+      } else {
+        results.push({
+          id: profile.id,
+          name: profile.name,
+          hasCookie: false,
+          isLive: false,
+          reason: response?.error || 'Lỗi kết nối server'
+        });
+      }
+    } catch (err) {
+      results.push({
+        id: profile.id,
+        name: profile.name,
+        hasCookie: false,
+        isLive: false,
+        reason: 'Lỗi: ' + err.message
+      });
+    }
+  }
+
+  // Set final progress to 100%
+  setProgressOverlay('Đang kiểm tra trạng thái Facebook...', 'Hoàn thành!', 100);
+  
+  // Brief delay to let the user see 100% completed status
+  await new Promise(resolve => setTimeout(resolve, 500));
+  hideProgressOverlay();
+
+  // Display results in showMessageModal
+  const deadProfiles = results.filter(r => !r.isLive);
+  const liveProfiles = results.filter(r => r.isLive);
+
+  let messageHtml = '';
+  
+  if (results.length === 0) {
+    messageHtml = '<p>Không nhận được dữ liệu kiểm tra.</p>';
+  } else {
+    messageHtml = `
+      <div style="font-size: 0.95rem; line-height: 1.5; max-height: 400px; overflow-y: auto;">
+        <p style="margin-bottom: 12px; font-weight: bold;">
+          Tổng kết kiểm tra (${results.length} Profiles):
+          <span style="color: #2ecc71; margin-left: 8px;">🟢 ${liveProfiles.length} Sống</span>
+          <span style="color: #e74c3c; margin-left: 8px;">🔴 ${deadProfiles.length} Die/Chưa Đăng Nhập</span>
+        </p>
+    `;
+
+    if (deadProfiles.length > 0) {
+      messageHtml += `
+        <div style="margin-top: 12px; border: 1px solid rgba(231, 76, 60, 0.3); background: rgba(231, 76, 60, 0.05); padding: 10px; border-radius: 6px;">
+          <div style="font-weight: bold; color: #e74c3c; margin-bottom: 8px;">❌ Danh sách Profile Die hoặc Chưa Đăng Nhập:</div>
+          <ul style="padding-left: 20px; margin: 0; display: flex; flex-direction: column; gap: 4px;">
+            ${deadProfiles.map(r => `
+              <li style="margin-bottom: 2px;">
+                <b>${esc(r.name)}</b>: 
+                <span style="color: #ea868f;">${esc(r.reason)}</span> 
+                ${r.fbId ? `<span style="font-size: 0.8rem; color: #9ca3af;">(FB ID: ${esc(r.fbId)})</span>` : ''}
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      `;
+    } else {
+      messageHtml += `
+        <div style="margin-top: 12px; border: 1px solid rgba(46, 204, 113, 0.3); background: rgba(46, 204, 113, 0.05); padding: 10px; border-radius: 6px; color: #2ecc71; font-weight: bold;">
+          🎉 Tuyệt vời! Tất cả tài khoản Facebook trong nhóm đều đang hoạt động tốt.
+        </div>
+      `;
+    }
+
+    if (liveProfiles.length > 0) {
+      messageHtml += `
+        <div style="margin-top: 12px; border: 1px solid rgba(46, 204, 113, 0.2); background: rgba(46, 204, 113, 0.02); padding: 10px; border-radius: 6px; max-height: 150px; overflow-y: auto;">
+          <div style="font-weight: bold; color: #2ecc71; margin-bottom: 6px;">✅ Danh sách Profile Sống:</div>
+          <ul style="padding-left: 20px; margin: 0; display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem;">
+            ${liveProfiles.map(r => `
+              <li style="margin-bottom: 2px;">
+                <b>${esc(r.name)}</b> - 
+                <span style="color: #2ecc71; font-weight: 500;">${esc(r.title)}</span> 
+                <span style="font-size: 0.8rem; color: #9ca3af;">(FB ID: ${esc(r.fbId)})</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      `;
+    }
+
+    messageHtml += `</div>`;
+  }
+
+  showMessageModal({
+    title: '🔍 Kết Quả Kiểm Tra Facebook',
+    message: messageHtml,
+    okText: 'Đóng'
+  });
+}
+
