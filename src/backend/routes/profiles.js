@@ -647,5 +647,291 @@ router.put('/:id/cookies', (req, res) => {
   }
 });
 
+function getProxyUrl(proxy, proxyType) {
+  let proxyStr = proxy.trim();
+  let scheme = proxyType || 'http';
+  
+  if (proxyStr.includes('://')) {
+    const parts = proxyStr.split('://');
+    scheme = parts[0];
+    proxyStr = parts[1];
+  }
+  
+  const parts = proxyStr.split(':');
+  if (parts.length === 4) {
+    const [host, port, user, pass] = parts;
+    proxyStr = `${user}:${pass}@${host}:${port}`;
+  }
+  
+  return `${scheme}://${proxyStr}`;
+}
+
+// ==================== POST Check FB status for a single profile ====================
+router.post('/:id/check-fb-status', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
+    const profile = stmt.get(id);
+    if (!profile) {
+      return res.status(404).json({ success: false, error: 'Profile không tồn tại trong CSDL' });
+    }
+
+    const axios = require('axios');
+    const fbId = cookieService.getFacebookUserId(id);
+    if (!fbId) {
+      return res.json({
+        success: true,
+        data: {
+          id,
+          name: profile.name,
+          hasCookie: false,
+          isLive: false,
+          reason: 'Không có cookie c_user (Chưa đăng nhập FB)'
+        }
+      });
+    }
+
+    // Check status using Axios (Direct connection without using profile proxy)
+    const url = `https://m.facebook.com/profile.php?id=${fbId}`;
+    const axiosOptions = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+      },
+      maxRedirects: 5,
+      validateStatus: () => true,
+      timeout: 5000 // Direct connection should load extremely fast
+    };
+
+    try {
+      const response = await axios.get(url, axiosOptions);
+      const html = response.data;
+      
+      const titleMatch = html.match(/<title>([^<]*)<\/title>/i);
+      const title = titleMatch ? titleMatch[1].trim() : '';
+
+      const isLive = title !== '' && title.toLowerCase() !== 'facebook' && title.toLowerCase() !== 'error';
+      res.json({
+        success: true,
+        data: {
+          id,
+          name: profile.name,
+          hasCookie: true,
+          fbId,
+          isLive,
+          title: isLive ? title : 'N/A',
+          reason: isLive ? 'Sống' : 'Tài khoản bị Khóa/Die hoặc link không tồn tại'
+        }
+      });
+    } catch (err) {
+      let errReason = err.message;
+      if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+        errReason = 'Lỗi kết nối (Timeout 5s)';
+      }
+      res.json({
+        success: true,
+        data: {
+          id,
+          name: profile.name,
+          hasCookie: true,
+          fbId,
+          isLive: false,
+          reason: errReason
+        }
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Helper to safely parse JSON from a Response object (handles non-JSON errors, e.g. HTML or blank response)
+async function safeJson(response) {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch (err) {
+    return { error: { message: text.substring(0, 300) || 'Phản hồi trống hoặc không hợp lệ từ máy chủ Microsoft' } };
+  }
+}
+
+// ==================== POST Mail Checker: List Emails ====================
+router.post('/mail-checker/list', async (req, res) => {
+  const { token, clientId, folder = 'inbox' } = req.body;
+  if (!token) {
+    return res.status(400).json({ success: false, error: 'Token is required' });
+  }
+
+  try {
+    let accessToken = token;
+    const activeClientId = (clientId && clientId.trim()) ? clientId.trim() : '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+
+    // Auto-detect: If token starts with 'ey' and contains dots, it is a JWT access_token.
+    // Otherwise, treat it as a refresh_token and exchange it.
+    const isAccessToken = token.startsWith('ey') && token.includes('.');
+    
+    if (!isAccessToken) {
+      const payload = new URLSearchParams({
+        client_id: activeClientId,
+        refresh_token: token,
+        grant_type: 'refresh_token'
+      });
+
+      const tokenResponse = await fetch('https://login.live.com/oauth20_token.srf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: payload
+      });
+
+      const tokenData = await safeJson(tokenResponse);
+      if (!tokenResponse.ok) {
+        return res.json({ success: false, error: 'Không thể giải mã Refresh Token hoặc Client ID không đúng: ' + JSON.stringify(tokenData) });
+      }
+      accessToken = tokenData.access_token;
+    }
+
+    // Fetch inbox emails from Microsoft Graph API first
+    const graphEndpoint = `https://graph.microsoft.com/v1.0/me/mailFolders/${folder}/messages?$select=id,subject,from,receivedDateTime&$top=15`;
+    const mailResponse = await fetch(graphEndpoint, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const mailData = await safeJson(mailResponse);
+    if (mailResponse.ok) {
+      return res.json({
+        success: true,
+        apiUsed: 'graph',
+        accessToken,
+        emails: mailData.value || []
+      });
+    }
+
+    // Fallback to Outlook REST API v2.0 if Graph fails
+    const errMessage = mailData.error?.message || '';
+    if (errMessage.includes('JWT') || errMessage.includes('token') || !mailResponse.ok) {
+      console.log('[MailChecker] Graph API failed, falling back to Outlook REST API v2.0...');
+      const outlookEndpoint = `https://outlook.office.com/api/v2.0/me/MailFolders/${folder}/messages?$select=Id,Subject,From,ReceivedDateTime&$top=15`;
+      const outlookResponse = await fetch(outlookEndpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const outlookData = await safeJson(outlookResponse);
+      if (outlookResponse.ok) {
+        // Normalize the emails data structure to match Graph API structure (lowercase)
+        const normalizedEmails = (outlookData.value || []).map(email => ({
+          id: email.Id || email.id,
+          subject: email.Subject || email.subject,
+          receivedDateTime: email.ReceivedDateTime || email.receivedDateTime,
+          from: email.From ? {
+            emailAddress: {
+              address: email.From.EmailAddress?.Address || email.From.emailAddress?.address || ''
+            }
+          } : (email.from || null)
+        }));
+
+        return res.json({
+          success: true,
+          apiUsed: 'outlook_v2',
+          accessToken,
+          emails: normalizedEmails
+        });
+      } else {
+        return res.json({
+          success: false,
+          error: `Graph API (Status ${mailResponse.status}): ${JSON.stringify(mailData)} | Outlook API (Status ${outlookResponse.status}): ${JSON.stringify(outlookData)}`
+        });
+      }
+    }
+
+    res.json({ success: false, error: `Lỗi lấy danh sách thư (Status ${mailResponse.status}): ` + errMessage });
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Lỗi liên kết máy chủ: ' + error.message });
+  }
+});
+
+// ==================== POST Mail Checker: Get Email Detail ====================
+router.post('/mail-checker/detail', async (req, res) => {
+  const { accessToken, messageId, apiUsed = 'graph' } = req.body;
+  if (!accessToken || !messageId) {
+    return res.status(400).json({ success: false, error: 'accessToken and messageId are required' });
+  }
+
+  try {
+    // If list API succeeded using Outlook v2, try Outlook v2 for details first
+    if (apiUsed === 'outlook_v2') {
+      const outlookEndpoint = `https://outlook.office.com/api/v2.0/me/messages/${messageId}?$select=Subject,Body`;
+      const response = await fetch(outlookEndpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await safeJson(response);
+      if (response.ok) {
+        return res.json({
+          success: true,
+          subject: data.Subject || '',
+          body: data.Body?.Content || ''
+        });
+      }
+    }
+
+    // Try Graph API
+    const graphEndpoint = `https://graph.microsoft.com/v1.0/me/messages/${messageId}?$select=subject,body`;
+    const response = await fetch(graphEndpoint, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await safeJson(response);
+    if (response.ok) {
+      return res.json({
+        success: true,
+        subject: data.subject || '',
+        body: data.body?.content || ''
+      });
+    }
+
+    // Graph failed, try Outlook v2 fallback
+    const outlookEndpoint = `https://outlook.office.com/api/v2.0/me/messages/${messageId}?$select=Subject,Body`;
+    const fallbackResponse = await fetch(outlookEndpoint, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const fallbackData = await safeJson(fallbackResponse);
+    if (fallbackResponse.ok) {
+      return res.json({
+        success: true,
+        subject: fallbackData.Subject || '',
+        body: fallbackData.Body?.Content || ''
+      });
+    }
+
+    res.json({ success: false, error: 'Lỗi tải chi tiết thư: ' + (fallbackData.error?.message || JSON.stringify(fallbackData)) });
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Lỗi kết nối: ' + error.message });
+  }
+});
+
 module.exports = router;
 
