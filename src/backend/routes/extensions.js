@@ -134,7 +134,7 @@ router.post('/chrome-web-store', async (req, res) => {
       try {
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
         extName = manifest.name || extName;
-      } catch (e) {}
+      } catch (e) { }
     }
 
     res.json({ success: true, data: { id: extensionId, name: extName } });
