@@ -126,6 +126,9 @@ export function renderProfiles() {
     const headerHtml = `
       <input type="checkbox" class="group-checkbox" ${allSelected ? 'checked' : ''} onclick="window.toggleGroupSelect('${esc(ipKey)}', event)">
       <span>${headerPrefixHtml}${detailsHtml}</span>
+      <button class="btn btn-primary btn-sm" onclick="window.checkFbGroupStatus('${esc(ipKey)}', event)" style="margin-left: auto; padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; cursor: pointer; background: var(--accent); border: none; color: white;">
+        🔍 Check FB Status
+      </button>
     `;
 
     const cards = items.map(p => {
