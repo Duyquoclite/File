@@ -17,6 +17,7 @@ import {
   deleteProfile,
   toggleSelect,
   toggleGroupSelect,
+  checkFbGroupStatus,
   setupModalEventListeners
 } from './modules/modals.js';
 import {
@@ -37,6 +38,7 @@ window.regenFingerprint = regenFingerprint;
 window.deleteProfile = deleteProfile;
 window.toggleSelect = toggleSelect;
 window.toggleGroupSelect = toggleGroupSelect;
+window.checkFbGroupStatus = checkFbGroupStatus;
 
 const components = [
   'create_modal.html',
@@ -48,7 +50,8 @@ const components = [
   'groups_modal.html',
   'bulk_script_modal.html',
   'update_modal.html',
-  'extensions_modal.html'
+  'extensions_modal.html',
+  'mail_checker_modal.html'
 ];
 
 async function loadComponents() {
