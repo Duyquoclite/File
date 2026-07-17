@@ -328,8 +328,87 @@ function saveCookiesForDomain(profileId, domain, cookies) {
   }
 }
 
+/**
+ * Extract and decrypt the Facebook User ID (c_user cookie) for a profile.
+ */
+function getFacebookUserId(profileId) {
+  const dbPath = getCookiesDatabasePath(profileId);
+  if (!dbPath) {
+    return null;
+  }
+
+  const tempPath = path.join(PROFILES_DIR, profileId, 'Cookies_fb_temp');
+  let db;
+  try {
+    fs.copyFileSync(dbPath, tempPath);
+    db = new Database(tempPath, { readonly: true });
+    
+    // Find the c_user cookie.
+    const row = db.prepare("SELECT * FROM cookies WHERE name = 'c_user' LIMIT 1").get();
+    db.close();
+    db = null;
+
+    if (!row) {
+      return null;
+    }
+
+    let aesKey;
+    try {
+      aesKey = getCookieMasterKey(profileId);
+    } catch (e) {
+      console.warn('[CookieService] Failed to decrypt master key for FB check:', e.message);
+      return row.value || null;
+    }
+
+    const encVal = row.encrypted_value;
+    if (aesKey && encVal && encVal.length > 0) {
+      const prefix = encVal.slice(0, 3).toString('ascii');
+      if (prefix === 'v10' || prefix === 'v11') {
+        try {
+          const iv = encVal.slice(3, 15);
+          const ciphertext = encVal.slice(15, encVal.length - 16);
+          const tag = encVal.slice(encVal.length - 16);
+          
+          const decipher = crypto.createDecipheriv('aes-256-gcm', aesKey, iv);
+          decipher.setAuthTag(tag);
+          let decBuf = decipher.update(ciphertext);
+          decBuf = Buffer.concat([decBuf, decipher.final()]);
+
+          // Strip 32-byte SHA-256 hash of domain if it is present
+          if (decBuf.length > 32) {
+            const sha256 = crypto.createHash('sha256').update(row.host_key).digest();
+            if (decBuf.slice(0, 32).equals(sha256)) {
+              return decBuf.slice(32).toString('utf8');
+            }
+          }
+          return decBuf.toString('utf8');
+        } catch (decErr) {
+          console.error('[CookieService] Decryption failed for c_user:', decErr.message);
+          return row.value || null;
+        }
+      } else {
+        return row.value || null;
+      }
+    } else {
+      return row.value || null;
+    }
+  } catch (err) {
+    console.error(`[CookieService] Error getting FB ID for profile ${profileId}:`, err.message);
+    return null;
+  } finally {
+    if (db) {
+      try { db.close(); } catch (_) {}
+    }
+    if (fs.existsSync(tempPath)) {
+      try { fs.unlinkSync(tempPath); } catch (_) {}
+    }
+  }
+}
+
 module.exports = {
   getCookiesList,
   getCookiesForDomain,
-  saveCookiesForDomain
+  saveCookiesForDomain,
+  getFacebookUserId
 };
+
