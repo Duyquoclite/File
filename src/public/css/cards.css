@@ -111,4 +111,43 @@
 .meta-tag.proxy { background: rgba(6,182,212,0.1); color: var(--info); border-color: rgba(6,182,212,0.15); }
 .meta-tag.notes { background: rgba(245,158,11,0.1); color: var(--warning); border-color: rgba(245,158,11,0.15); }
 
+.card-notes {
+  margin-top: 10px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  position: relative;
+  display: block;
+}
+
+.card-notes .notes-title {
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.card-notes .notes-content {
+  margin-top: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+}
+
+.card-notes.collapsed {
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.15);
+  margin-bottom: 10px;
+}
+
+.card-notes.collapsed .notes-content {
+  display: none;
+}
+
 .card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
