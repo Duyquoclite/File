@@ -42,15 +42,15 @@
     },
     {
       "date": "2026-07-20",
-      "vnd": 81162,
-      "percent": 0.54108
+      "percent": 0.54108,
+      "vnd": 81162
     }
   ],
   "last": {
-    "raw": "61146",
+    "raw": "81162",
     "unit": "1",
-    "vnd": 61146,
-    "percent": 0.40764
+    "vnd": 81162,
+    "percent": 0.54108
   },
   "selectedMilestone": null
 }
