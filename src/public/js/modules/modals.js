@@ -542,6 +542,22 @@ function renderCookieEditor(profileId, domain) {
   }
 }
 
+function initAutoGrowTextarea(id) {
+  const tx = document.getElementById(id);
+  if (!tx) return;
+  tx.style.boxSizing = 'border-box';
+  tx.style.resize = 'none';
+  tx.style.overflowY = 'hidden';
+  
+  const resize = () => {
+    tx.style.height = 'auto';
+    tx.style.height = tx.scrollHeight + 'px';
+  };
+  
+  setTimeout(resize, 50);
+  tx.addEventListener('input', resize);
+}
+
 export async function showDetail(id) {
   const res = await api(`/profiles/${id}`);
   if (!res.success) {
@@ -577,7 +593,7 @@ export async function showDetail(id) {
         </div>
         <div class="form-group">
           <label>Ghi chú</label>
-          <textarea id="editNotes" rows="2">${esc(p.notes)}</textarea>
+          <textarea id="editNotes" rows="5">${esc(p.notes)}</textarea>
         </div>
         <div class="form-group">
           <label>Thẻ (Tags)</label>
@@ -790,6 +806,7 @@ export async function showDetail(id) {
   }
 
   openModal('detailModal');
+  initAutoGrowTextarea('editNotes');
 
   if (p.proxy && p.proxyType !== 'none' && !p.proxyCountry && !p.proxyTimezone) {
     ensureProxyMetadata('editProxy', 'editProxyType', 'editProxyStatus').then(() => {
@@ -1014,6 +1031,7 @@ export function setupModalEventListeners() {
     btnCreate.onclick = () => {
       openModal('createModal');
       loadFingerprintSample();
+      initAutoGrowTextarea('profileNotes');
     };
   }
 
@@ -1067,7 +1085,11 @@ export function setupModalEventListeners() {
         toast(`Profile "${name}" đã tạo!`, 'success');
         closeModal('createModal');
         document.getElementById('profileName').value = '';
-        document.getElementById('profileNotes').value = '';
+        const notesEl = document.getElementById('profileNotes');
+        if (notesEl) {
+          notesEl.value = '';
+          notesEl.style.height = 'auto';
+        }
         document.getElementById('profileTags').value = '';
         document.getElementById('proxyAddress').value = '';
         document.getElementById('proxyType').value = 'none';
@@ -1587,14 +1609,26 @@ export function setupModalEventListeners() {
       listContainer.innerHTML = emails.map(email => {
         const fromAddr = email.from?.emailAddress?.address || 'Không rõ người gửi';
         const receivedDate = email.receivedDateTime ? new Date(email.receivedDateTime).toLocaleString('vi-VN') : 'Không rõ ngày';
+        
+        // Define folder badge styling
+        let badgeHtml = '';
+        if (email.folder === 'junk') {
+          badgeHtml = `<span style="background: rgba(239, 68, 68, 0.15); color: #f87171; font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; font-weight: 600; flex-shrink: 0; line-height: 1.2;">Junk</span>`;
+        } else {
+          badgeHtml = `<span style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; font-weight: 600; flex-shrink: 0; line-height: 1.2;">Inbox</span>`;
+        }
+
         return `
-          <div class="mail-item" data-id="${email.id}" style="padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 4px;">
-            <div style="display:flex; justify-content:space-between; font-weight:600; font-size:0.8rem; color:var(--text);">
-              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;">${esc(fromAddr)}</span>
+          <div class="mail-item" data-id="${email.id}" style="padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display:flex; justify-content:space-between; font-weight:600; font-size:0.8rem; color:var(--text); align-items: center;">
+              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:170px;">${esc(fromAddr)}</span>
               <span style="font-size:0.7rem; color:var(--text-muted); font-weight:normal;">${receivedDate}</span>
             </div>
-            <div style="font-size:0.8rem; font-weight:500; color:var(--text-secondary); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
-              ${esc(email.subject || '(Không có tiêu đề)')}
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <div style="font-size:0.8rem; font-weight:500; color:var(--text-secondary); text-overflow:ellipsis; overflow:hidden; white-space:nowrap; flex:1;">
+                ${esc(email.subject || '(Không có tiêu đề)')}
+              </div>
+              ${badgeHtml}
             </div>
           </div>
         `;
