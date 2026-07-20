@@ -19,7 +19,7 @@ router.get('/', (req, res) => {
     if (typeof db.syncProfiles === 'function') {
       db.syncProfiles();
     }
-    const { search, limit = 100, offset = 0 } = req.query;
+    const { search, limit = 10000, offset = 0 } = req.query;
     let stmt;
     let profiles;
 
@@ -791,68 +791,162 @@ router.post('/mail-checker/list', async (req, res) => {
       accessToken = tokenData.access_token;
     }
 
-    // Fetch inbox emails from Microsoft Graph API first
-    const graphEndpoint = `https://graph.microsoft.com/v1.0/me/mailFolders/${folder}/messages?$select=id,subject,from,receivedDateTime&$top=15`;
-    const mailResponse = await fetch(graphEndpoint, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    let emails = [];
+    let apiUsed = 'graph';
+    let graphSuccess = false;
 
-    const mailData = await safeJson(mailResponse);
-    if (mailResponse.ok) {
+    // Fetch both inbox and junkemail if folder is 'inbox'
+    if (folder === 'inbox') {
+      try {
+        const [inboxRes, junkRes] = await Promise.all([
+          fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$select=id,subject,from,receivedDateTime&$top=15`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          }),
+          fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/junkemail/messages?$select=id,subject,from,receivedDateTime&$top=15`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          }).catch(err => {
+            console.error('[MailChecker] Graph API Junk fetch failed:', err);
+            return null;
+          })
+        ]);
+
+        if (inboxRes && inboxRes.ok) {
+          graphSuccess = true;
+          const inboxData = await safeJson(inboxRes);
+          const inboxEmails = (inboxData.value || []).map(email => ({ ...email, folder: 'inbox' }));
+          emails.push(...inboxEmails);
+
+          if (junkRes && junkRes.ok) {
+            const junkData = await safeJson(junkRes);
+            const junkEmails = (junkData.value || []).map(email => ({ ...email, folder: 'junk' }));
+            emails.push(...junkEmails);
+          }
+        }
+      } catch (err) {
+        console.error('[MailChecker] Graph API error:', err);
+      }
+    } else {
+      try {
+        const mailResponse = await fetch(`https://graph.microsoft.com/v1.0/me/mailFolders/${folder}/messages?$select=id,subject,from,receivedDateTime&$top=15`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (mailResponse.ok) {
+          graphSuccess = true;
+          const mailData = await safeJson(mailResponse);
+          emails = (mailData.value || []).map(email => ({ ...email, folder }));
+        }
+      } catch (err) {
+        console.error('[MailChecker] Graph API specific folder error:', err);
+      }
+    }
+
+    if (graphSuccess) {
+      emails.sort((a, b) => new Date(b.receivedDateTime) - new Date(a.receivedDateTime));
       return res.json({
         success: true,
         apiUsed: 'graph',
         accessToken,
-        emails: mailData.value || []
+        emails
       });
     }
 
     // Fallback to Outlook REST API v2.0 if Graph fails
-    const errMessage = mailData.error?.message || '';
-    if (errMessage.includes('JWT') || errMessage.includes('token') || !mailResponse.ok) {
-      console.log('[MailChecker] Graph API failed, falling back to Outlook REST API v2.0...');
-      const outlookEndpoint = `https://outlook.office.com/api/v2.0/me/MailFolders/${folder}/messages?$select=Id,Subject,From,ReceivedDateTime&$top=15`;
-      const outlookResponse = await fetch(outlookEndpoint, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
+    console.log('[MailChecker] Graph API failed or skipped, falling back to Outlook REST API v2.0...');
+    let outlookSuccess = false;
+    let outlookEmails = [];
 
-      const outlookData = await safeJson(outlookResponse);
-      if (outlookResponse.ok) {
-        // Normalize the emails data structure to match Graph API structure (lowercase)
-        const normalizedEmails = (outlookData.value || []).map(email => ({
-          id: email.Id || email.id,
-          subject: email.Subject || email.subject,
-          receivedDateTime: email.ReceivedDateTime || email.receivedDateTime,
-          from: email.From ? {
-            emailAddress: {
-              address: email.From.EmailAddress?.Address || email.From.emailAddress?.address || ''
+    if (folder === 'inbox') {
+      try {
+        const [outlookInboxRes, outlookJunkRes] = await Promise.all([
+          fetch(`https://outlook.office.com/api/v2.0/me/MailFolders/Inbox/messages?$select=Id,Subject,From,ReceivedDateTime&$top=15`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
             }
-          } : (email.from || null)
-        }));
+          }),
+          fetch(`https://outlook.office.com/api/v2.0/me/MailFolders/JunkEmail/messages?$select=Id,Subject,From,ReceivedDateTime&$top=15`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          }).catch(err => {
+            console.error('[MailChecker] Outlook API Junk fetch failed:', err);
+            return null;
+          })
+        ]);
 
-        return res.json({
-          success: true,
-          apiUsed: 'outlook_v2',
-          accessToken,
-          emails: normalizedEmails
+        if (outlookInboxRes && outlookInboxRes.ok) {
+          outlookSuccess = true;
+          const inboxData = await safeJson(outlookInboxRes);
+          const inboxMails = (inboxData.value || []).map(email => ({ ...email, folder: 'inbox' }));
+          outlookEmails.push(...inboxMails);
+
+          if (outlookJunkRes && outlookJunkRes.ok) {
+            const junkData = await safeJson(outlookJunkRes);
+            const junkMails = (junkData.value || []).map(email => ({ ...email, folder: 'junk' }));
+            outlookEmails.push(...junkMails);
+          }
+        }
+      } catch (err) {
+        console.error('[MailChecker] Outlook API error:', err);
+      }
+    } else {
+      try {
+        const outlookResponse = await fetch(`https://outlook.office.com/api/v2.0/me/MailFolders/${folder}/messages?$select=Id,Subject,From,ReceivedDateTime&$top=15`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
         });
-      } else {
-        return res.json({
-          success: false,
-          error: `Graph API (Status ${mailResponse.status}): ${JSON.stringify(mailData)} | Outlook API (Status ${outlookResponse.status}): ${JSON.stringify(outlookData)}`
-        });
+        if (outlookResponse.ok) {
+          outlookSuccess = true;
+          const outlookData = await safeJson(outlookResponse);
+          outlookEmails = (outlookData.value || []).map(email => ({ ...email, folder }));
+        }
+      } catch (err) {
+        console.error('[MailChecker] Outlook API specific folder error:', err);
       }
     }
 
-    res.json({ success: false, error: `Lỗi lấy danh sách thư (Status ${mailResponse.status}): ` + errMessage });
+    if (outlookSuccess) {
+      const normalizedEmails = outlookEmails.map(email => ({
+        id: email.Id || email.id,
+        subject: email.Subject || email.subject,
+        receivedDateTime: email.ReceivedDateTime || email.receivedDateTime,
+        folder: email.folder,
+        from: email.From ? {
+          emailAddress: {
+            address: email.From.EmailAddress?.Address || email.From.emailAddress?.address || ''
+          }
+        } : (email.from || null)
+      }));
+
+      normalizedEmails.sort((a, b) => new Date(b.receivedDateTime) - new Date(a.receivedDateTime));
+
+      return res.json({
+        success: true,
+        apiUsed: 'outlook_v2',
+        accessToken,
+        emails: normalizedEmails
+      });
+    }
+
+    res.json({ success: false, error: 'Lỗi lấy danh sách thư từ cả Graph API và Outlook REST API.' });
 
   } catch (error) {
     res.status(500).json({ success: false, error: 'Lỗi liên kết máy chủ: ' + error.message });
