@@ -323,16 +323,26 @@ app.get('*', (req, res) => {
 });
 
 // ====== Start server ======
-server.listen(PORT, () => {
-  console.log(`
+const autoUpdater = require('./backend/services/autoUpdater');
+
+(async () => {
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (err) {
+    console.error('[AutoUpdater] Error checking for updates on startup:', err.message);
+  }
+
+  server.listen(PORT, () => {
+    console.log(`
   ╔══════════════════════════════════════════════════╗
   ║   Chrome Profile Manager                         ║
   ║   Server running at http://localhost:${PORT}        ║
   ║   WebSocket at ws://localhost:${PORT}/ws            ║
   ╚══════════════════════════════════════════════════╝
-  `);
-  proxyCheckerService.start();
-});
+    `);
+    proxyCheckerService.start();
+  });
+})();
 
 async function shutdown(signal, exitCode = 0) {
   try {
