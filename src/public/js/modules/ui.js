@@ -170,12 +170,16 @@ export function renderProfiles() {
           <div class="card-meta">
             <span class="meta-tag">${fp.platform || 'Win32'}</span>
             <span class="meta-tag">${fp.screen ? fp.screen.width + 'x' + fp.screen.height : '1920x1080'}</span>
-            ${p.proxy ? `<span class="meta-tag proxy">${esc(p.proxyIp || parseProxyHost(p.proxy))}</span>` : ''}
             ${categoryBadge}
             ${tagsHtml}
             <span class="meta-tag open-count" style="color: #60a5fa; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.2);">🚀 Mở: ${p.openCount || 0} lần</span>
-            ${p.notes ? `<span class="meta-tag notes">📝 ${esc(p.notes.substring(0, 20))}</span>` : ''}
           </div>
+          ${p.notes ? `
+            <div class="card-notes collapsed" onclick="this.classList.toggle('collapsed'); event.stopPropagation();">
+              <span class="notes-title">📝 Xem ghi chú</span>
+              <div class="notes-content">${esc(p.notes)}</div>
+            </div>
+          ` : ''}
           <div class="card-actions">
             ${state.launchingProfileIds.has(p.id)
               ? `
