@@ -9,7 +9,6 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 const path = require('path');
 const chromeService = require('./backend/services/chromeService');
-const proxyCheckerService = require('./backend/services/proxyCheckerService');
 const db = require('./backend/db');
 
 const app = express();
@@ -340,8 +339,8 @@ const autoUpdater = require('./backend/services/autoUpdater');
   ║   WebSocket at ws://localhost:${PORT}/ws            ║
   ╚══════════════════════════════════════════════════╝
     `);
-    proxyCheckerService.start();
   });
+
 })();
 
 async function shutdown(signal, exitCode = 0) {
