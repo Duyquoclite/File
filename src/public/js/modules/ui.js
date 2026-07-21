@@ -121,15 +121,53 @@ export function renderProfiles() {
       detailsHtml = ` - <span style="color: #f1c40f;">${esc(timezone)}</span>`;
     }
     const headerPrefixHtml = ipKey === 'no-proxy' ? 'Không có proxy' : esc(ipKey.replace(/^[a-zA-Z0-9]+:\/*/, ''));
+
+    // Auto detect dynamic proxy IP change and initialize 15-minute countdown
+    const isDynamic = items.some(p => p.proxyCategory === 'dynamic');
+    const lastRotatedAt = items.find(p => p.proxyLastRotatedAt)?.proxyLastRotatedAt || '';
+
+    let countdownText = '';
+    if (isDynamic) {
+      const parsedRotation = parseInt(lastRotatedAt, 10);
+      if (!lastRotatedAt || isNaN(parsedRotation)) {
+        countdownText = '⏳ Chờ IP xoay...';
+      } else {
+        const elapsed = Date.now() - parsedRotation;
+        const fifteenMins = 15 * 60 * 1000;
+        const sixteenMins = 16 * 60 * 1000;
+        const remaining = fifteenMins - elapsed;
+        if (remaining > 0) {
+          const minutes = Math.floor(remaining / 60000);
+          const seconds = Math.floor((remaining % 60000) / 1000);
+          const padSec = String(seconds).padStart(2, '0');
+          const padMin = String(minutes).padStart(2, '0');
+          countdownText = `⏳ Xoay IP sau: ${padMin}:${padSec}`;
+        } else if (elapsed <= sixteenMins) {
+          countdownText = `🔄 Đang xoay IP...`;
+        } else {
+          countdownText = `⏳ Chờ IP xoay...`;
+        }
+      }
+    }
+
+    const titleHtml = isDynamic
+      ? `
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div class="proxy-countdown" data-proxy="${esc(ipKey)}" data-rotated="${esc(lastRotatedAt)}" style="font-size: 0.75rem; color: #f1c40f; font-weight: bold; display: block;">${esc(countdownText)}</div>
+          <span>${headerPrefixHtml}${detailsHtml}</span>
+        </div>
+      `
+      : `<span>${headerPrefixHtml}${detailsHtml}</span>`;
     
     // Convert click events to call global window helper functions mapped in app.js
     const headerHtml = `
       <input type="checkbox" class="group-checkbox" ${allSelected ? 'checked' : ''} onclick="window.toggleGroupSelect('${esc(ipKey)}', event)">
-      <span>${headerPrefixHtml}${detailsHtml}</span>
+      ${titleHtml}
       <button class="btn btn-primary btn-sm" onclick="window.checkFbGroupStatus('${esc(ipKey)}', event)" style="margin-left: auto; padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; cursor: pointer; background: var(--accent); border: none; color: white;">
         🔍 Check FB Status
       </button>
     `;
+
 
     const cards = items.map(p => {
       const fp = p.fingerprint || {};
@@ -410,3 +448,37 @@ export function initUI() {
     };
   }
 }
+
+// Start dynamic proxy countdown timer update interval
+setInterval(() => {
+  document.querySelectorAll('.proxy-countdown').forEach(el => {
+    const lastRotation = el.getAttribute('data-rotated');
+    const parsedRotation = parseInt(lastRotation, 10);
+    if (!lastRotation || isNaN(parsedRotation)) {
+      el.textContent = `⏳ Chờ IP xoay...`;
+      el.style.display = 'block';
+      return;
+    }
+    
+    const elapsed = Date.now() - parsedRotation;
+    const fifteenMins = 15 * 60 * 1000;
+    const sixteenMins = 16 * 60 * 1000;
+    const remaining = fifteenMins - elapsed;
+    
+    if (remaining > 0) {
+      const minutes = Math.floor(remaining / 60000);
+      const seconds = Math.floor((remaining % 60000) / 1000);
+      const padSec = String(seconds).padStart(2, '0');
+      const padMin = String(minutes).padStart(2, '0');
+      el.textContent = `⏳ Xoay IP sau: ${padMin}:${padSec}`;
+      el.style.display = 'block';
+    } else if (elapsed <= sixteenMins) {
+      el.textContent = `🔄 Đang xoay IP...`;
+      el.style.display = 'block';
+    } else {
+      el.textContent = `⏳ Chờ IP xoay...`;
+      el.style.display = 'block';
+    }
+  });
+}, 1000);
+
