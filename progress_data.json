@@ -82,5 +82,9 @@
     "vnd": 81162,
     "percent": 0.54108
   },
-  "selectedMilestone": null
+  "selectedMilestone": null,
+  "debt": {
+    "total": 500000,
+    "paid": 20000
+  }
 }
