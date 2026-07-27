@@ -34,8 +34,15 @@ async function pollUpdates() {
   }
 }
 
-function startPolling() {
+async function startPolling() {
   console.log('[TG POLL] Starting Telegram terminal logger...');
+  try {
+    // Delete webhook to clear any 409 conflict
+    await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook`);
+    console.log('[TG POLL] Webhook cleared successfully.');
+  } catch (err) {
+    console.error('[TG POLL] Failed to clear webhook:', err.message);
+  }
   pollUpdates();
 }
 
