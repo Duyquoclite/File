@@ -335,6 +335,24 @@ function autoFixDPAPIKey(userDataDir) {
   }
 }
 
+function autoImportCookies(userDataDir, profileId) {
+  const cookiesJsonPath = path.join(userDataDir, 'cookies.json');
+  if (fs.existsSync(cookiesJsonPath)) {
+    console.log(`[Cookies AutoFix] Found cookies.json in ${cookiesJsonPath}. Importing and encrypting for local machine...`);
+    try {
+      const cookiesData = JSON.parse(fs.readFileSync(cookiesJsonPath, 'utf8'));
+      if (Array.isArray(cookiesData) && cookiesData.length > 0) {
+        const cookieService = require('./cookieService');
+        cookieService.importAllCookies(profileId, cookiesData);
+        console.log('[Cookies AutoFix] Successfully re-encrypted and imported cookies.');
+      }
+      fs.unlinkSync(cookiesJsonPath);
+    } catch (err) {
+      console.error('[Cookies AutoFix] Error:', err.message);
+    }
+  }
+}
+
 /**
  * Launch a Chrome browser for a given profile.
  * @param {Object} profile - profile object from DB
@@ -354,6 +372,7 @@ async function launchProfile(profile) {
   if (!fs.existsSync(userDataDir)) fs.mkdirSync(userDataDir, { recursive: true });
 
   autoFixDPAPIKey(userDataDir);
+  autoImportCookies(userDataDir, profile.id);
   cleanupStaleProfileLock(userDataDir);
   updateProfileNameInPrefs(userDataDir, profile.name);
   const fingerprint = JSON.parse(profile.fingerprint || '{}');
