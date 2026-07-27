@@ -150,7 +150,14 @@ router.post('/github-apply', async (req, res) => {
       } catch (err) {
         // Fallback to raw github url
         const rawUrl = `https://raw.githubusercontent.com/${cleanRepo}/${cleanBranch}/${item.path}`;
+        const fallbackHeaders = {
+          'User-Agent': 'chrome-profile-manager-updater'
+        };
+        if (cleanToken) {
+          fallbackHeaders['Authorization'] = `token ${cleanToken}`;
+        }
         const fileRes = await axios.get(rawUrl, {
+          headers: fallbackHeaders,
           responseType: 'arraybuffer'
         });
         fileBuffer = Buffer.from(fileRes.data);
