@@ -87,9 +87,23 @@ function getCookiesList(profileId) {
   }
 
   // Copy to temp file to avoid locking issues (especially if browser is running)
-  const tempPath = path.join(PROFILES_DIR, profileId, 'Cookies_list_temp');
+  const tempPath = path.join(PROFILES_DIR, profileId, `Cookies_list_${Date.now()}_temp`);
   try {
-    fs.copyFileSync(dbPath, tempPath);
+    try {
+      fs.copyFileSync(dbPath, tempPath);
+    } catch (copyErr) {
+      // If locked by running Chrome, attempt fallback reading directly
+      const db = new Database(dbPath, { readonly: true, timeout: 1000 });
+      const rows = db.prepare(`
+        SELECT host_key, COUNT(*) as count 
+        FROM cookies 
+        GROUP BY host_key 
+        ORDER BY count DESC
+      `).all();
+      db.close();
+      return rows.map(r => ({ domain: r.host_key, count: r.count }));
+    }
+
     const db = new Database(tempPath, { readonly: true });
     
     // Group cookies by domain (host_key)
@@ -106,8 +120,8 @@ function getCookiesList(profileId) {
       count: r.count
     }));
   } catch (err) {
-    console.error(`[CookieService] Error getting cookies list for ${profileId}:`, err);
-    throw err;
+    console.error(`[CookieService] Error getting cookies list for ${profileId}:`, err.message);
+    return [];
   } finally {
     if (fs.existsSync(tempPath)) {
       try { fs.unlinkSync(tempPath); } catch (_) {}
@@ -124,10 +138,15 @@ function getCookiesForDomain(profileId, domain) {
     return { cookies: [], raw: '' };
   }
 
-  const tempPath = path.join(PROFILES_DIR, profileId, 'Cookies_domain_temp');
+  const tempPath = path.join(PROFILES_DIR, profileId, `Cookies_domain_${Date.now()}_temp`);
+  let db;
   try {
-    fs.copyFileSync(dbPath, tempPath);
-    const db = new Database(tempPath, { readonly: true });
+    try {
+      fs.copyFileSync(dbPath, tempPath);
+      db = new Database(tempPath, { readonly: true });
+    } catch (copyErr) {
+      db = new Database(dbPath, { readonly: true, timeout: 1000 });
+    }
     
     const rows = db.prepare('SELECT * FROM cookies WHERE host_key = ? ORDER BY name ASC').all(domain);
     db.close();
@@ -337,11 +356,15 @@ function getFacebookUserId(profileId) {
     return null;
   }
 
-  const tempPath = path.join(PROFILES_DIR, profileId, 'Cookies_fb_temp');
+  const tempPath = path.join(PROFILES_DIR, profileId, `Cookies_fb_${Date.now()}_temp`);
   let db;
   try {
-    fs.copyFileSync(dbPath, tempPath);
-    db = new Database(tempPath, { readonly: true });
+    try {
+      fs.copyFileSync(dbPath, tempPath);
+      db = new Database(tempPath, { readonly: true });
+    } catch (copyErr) {
+      db = new Database(dbPath, { readonly: true, timeout: 1000 });
+    }
     
     // Find the c_user cookie.
     const row = db.prepare("SELECT * FROM cookies WHERE name = 'c_user' LIMIT 1").get();
