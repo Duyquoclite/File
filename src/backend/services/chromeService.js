@@ -299,6 +299,42 @@ async function isProxyOnline(proxyUrl, proxyType) {
   }
 }
 
+function autoFixDPAPIKey(userDataDir) {
+  const dpapiKeyPath = path.join(userDataDir, 'dpapi_key.txt');
+  if (fs.existsSync(dpapiKeyPath)) {
+    console.log(`[DPAPI AutoFix] Found plaintext Chrome key in ${dpapiKeyPath}. Re-encrypting for local machine...`);
+    try {
+      const decryptedB64 = fs.readFileSync(dpapiKeyPath, 'utf8').trim();
+      if (decryptedB64) {
+        const cp = require('child_process');
+        const psCommand = `Add-Type -AssemblyName System.Security; $bytes = [System.Convert]::FromBase64String('${decryptedB64}'); $enc = [System.Security.Cryptography.ProtectedData]::Protect($bytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser); [System.Convert]::ToBase64String($enc);`;
+        const newEncryptedB64 = cp.execSync(`powershell -NoProfile -Command "${psCommand}"`, { encoding: 'utf8' }).trim();
+        
+        if (newEncryptedB64) {
+          const prefix = Buffer.from('DPAPI');
+          const encryptedBytes = Buffer.from(newEncryptedB64, 'base64');
+          const finalBase64 = Buffer.concat([prefix, encryptedBytes]).toString('base64');
+          
+          const localStatePath = path.join(userDataDir, 'Local State');
+          let localState = {};
+          if (fs.existsSync(localStatePath)) {
+            try {
+              localState = JSON.parse(fs.readFileSync(localStatePath, 'utf8'));
+            } catch (e) {}
+          }
+          if (!localState.os_crypt) localState.os_crypt = {};
+          localState.os_crypt.encrypted_key = finalBase64;
+          fs.writeFileSync(localStatePath, JSON.stringify(localState, null, 2), 'utf8');
+          console.log('[DPAPI AutoFix] Successfully re-encrypted key.');
+        }
+      }
+      fs.unlinkSync(dpapiKeyPath);
+    } catch (err) {
+      console.error('[DPAPI AutoFix] Error:', err.message);
+    }
+  }
+}
+
 /**
  * Launch a Chrome browser for a given profile.
  * @param {Object} profile - profile object from DB
@@ -317,6 +353,7 @@ async function launchProfile(profile) {
   const userDataDir = path.join(PROFILES_DIR, profile.id);
   if (!fs.existsSync(userDataDir)) fs.mkdirSync(userDataDir, { recursive: true });
 
+  autoFixDPAPIKey(userDataDir);
   cleanupStaleProfileLock(userDataDir);
   updateProfileNameInPrefs(userDataDir, profile.name);
   const fingerprint = JSON.parse(profile.fingerprint || '{}');
