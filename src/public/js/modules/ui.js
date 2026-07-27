@@ -112,6 +112,19 @@ export function renderProfiles() {
     const firstItem = items[0];
     const country = firstItem ? (firstItem.proxyCountry || '') : '';
     const timezone = firstItem ? (firstItem.proxyTimezone || '') : '';
+
+    let groupCategoryBadge = '';
+    if (ipKey !== 'no-proxy' && firstItem && firstItem.proxy && firstItem.proxyType !== 'none') {
+      const cat = firstItem.proxyCategory || 'undetermined';
+      if (cat === 'static') {
+        groupCategoryBadge = ` <span class="meta-tag" style="background: rgba(46, 204, 113, 0.15); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.3); font-weight: 600; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 6px;">Proxy Tĩnh</span>`;
+      } else if (cat === 'dynamic') {
+        groupCategoryBadge = ` <span class="meta-tag" style="background: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.3); font-weight: 600; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 6px;">Proxy Động</span>`;
+      } else {
+        groupCategoryBadge = ` <span class="meta-tag" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); font-weight: 600; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 6px;">Proxy Chưa xác định</span>`;
+      }
+    }
+
     let detailsHtml = '';
     if (country && timezone) {
       detailsHtml = ` - <span style="color: #2ecc71; font-weight: 500;">${esc(country)}</span> (<span style="color: #f1c40f;">${esc(timezone)}</span>)`;
@@ -122,7 +135,7 @@ export function renderProfiles() {
     }
     const headerPrefixHtml = ipKey === 'no-proxy' ? 'Không có proxy' : esc(ipKey.replace(/^[a-zA-Z0-9]+:\/*/, ''));
 
-    const titleHtml = `<span>${headerPrefixHtml}${detailsHtml}</span>`;
+    const titleHtml = `<span>${headerPrefixHtml}${detailsHtml}${groupCategoryBadge}</span>`;
     
     // Convert click events to call global window helper functions mapped in app.js
     const headerHtml = `
@@ -139,18 +152,6 @@ export function renderProfiles() {
       const isSelected = state.selectedIds.has(p.id);
       const statusClass = p.isRunning ? 'running' : '';
       const cardClass = `profile-card ${statusClass} ${isSelected ? 'selected' : ''}`;
-
-      let categoryBadge = '';
-      if (p.proxy && p.proxyType !== 'none') {
-        const cat = p.proxyCategory || 'undetermined';
-        if (cat === 'static') {
-          categoryBadge = `<span class="meta-tag" style="background: rgba(46, 204, 113, 0.1); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.2); font-weight: 500;">Tĩnh</span>`;
-        } else if (cat === 'dynamic') {
-          categoryBadge = `<span class="meta-tag" style="background: rgba(241, 196, 15, 0.1); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.2); font-weight: 500;">Động</span>`;
-        } else {
-          categoryBadge = `<span class="meta-tag" style="background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2); font-weight: 500;">Chưa xác định</span>`;
-        }
-      }
 
       let tagsHtml = '';
       if (p.tags && p.tags.trim()) {
@@ -173,7 +174,6 @@ export function renderProfiles() {
           <div class="card-meta">
             <span class="meta-tag">${fp.platform || 'Win32'}</span>
             <span class="meta-tag">${fp.screen ? fp.screen.width + 'x' + fp.screen.height : '1920x1080'}</span>
-            ${categoryBadge}
             ${tagsHtml}
             <span class="meta-tag open-count" style="color: #60a5fa; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.2);">🚀 Mở: ${p.openCount || 0} lần</span>
           </div>
