@@ -9,9 +9,18 @@
       
       <!-- Column 1: Accounts Sidebar -->
       <div style="width: 280px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.15); flex-shrink: 0;">
-        <div style="padding: 10px 12px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
-          <span style="font-weight: 600; font-size: 0.85rem;">Danh sách tài khoản</span>
-          <button id="btnImportAccounts" class="btn btn-primary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;">➕ Nhập List</button>
+        <div style="padding: 8px 12px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 600; font-size: 0.85rem;">Tài khoản</span>
+            <div style="display: flex; gap: 4px;">
+              <button id="btnCheckAllMails" class="btn btn-warning btn-sm" style="padding: 2px 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer;">⚡ Check Mail</button>
+              <button id="btnImportAccounts" class="btn btn-primary btn-sm" style="padding: 2px 6px; font-size: 0.75rem; cursor: pointer;">➕ Nhập List</button>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem;">
+            <span id="mailCheckStatusText" style="color: var(--text-muted); font-size: 0.75rem;">Chưa check</span>
+            <button id="btnToggleDieMails" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 0.7rem; display: none; cursor: pointer;">Hiện Mail Die</button>
+          </div>
         </div>
         <div id="accountsListContainer" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column;">
           <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.8rem;">
