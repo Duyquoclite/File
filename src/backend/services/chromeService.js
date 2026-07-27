@@ -32,11 +32,15 @@ if (!fs.existsSync(EXTENSIONS_DIR)) fs.mkdirSync(EXTENSIONS_DIR, { recursive: tr
 function cleanupStaleProfileLock(userDataDir) {
   try {
     const stalePaths = [
+      path.join(userDataDir, 'LOCK'),
+      path.join(userDataDir, 'SingletonLock'),
+      path.join(userDataDir, 'SingletonSocket'),
+      path.join(userDataDir, 'SingletonCookie'),
+      path.join(userDataDir, 'DevToolsActivePort'),
       path.join(userDataDir, 'Default', 'LOCK'),
       path.join(userDataDir, 'Default', 'SingletonLock'),
       path.join(userDataDir, 'Default', 'SingletonSocket'),
       path.join(userDataDir, 'Default', 'SingletonCookie'),
-      path.join(userDataDir, 'DevToolsActivePort'),
     ];
     for (const stalePath of stalePaths) {
       if (fs.existsSync(stalePath)) {
@@ -302,7 +306,12 @@ async function isProxyOnline(proxyUrl, proxyType) {
  */
 async function launchProfile(profile) {
   if (runningBrowsers.has(profile.id)) {
-    return { success: false, error: 'Profile is already running' };
+    const entry = runningBrowsers.get(profile.id);
+    if (entry && entry.browser && entry.browser.isConnected()) {
+      return { success: false, error: 'Profile is already running' };
+    } else {
+      runningBrowsers.delete(profile.id);
+    }
   }
 
   const userDataDir = path.join(PROFILES_DIR, profile.id);
@@ -318,7 +327,7 @@ async function launchProfile(profile) {
 
   if (profile.proxy && profile.proxy.trim()) {
     let proxyStr = profile.proxy.trim();
-    
+
     // Strip protocol prefix if present to normalize
     let cleanProxy = proxyStr;
     let scheme = profile.proxyType || 'http';
@@ -327,9 +336,9 @@ async function launchProfile(profile) {
       scheme = parts[0];
       cleanProxy = parts[1];
     }
-    
+
     let parts = cleanProxy.split(':');
-    
+
     if (parts.length === 4) {
       // IP:PORT:USER:PASS format
       const [host, port, user, pass] = parts;
@@ -373,17 +382,17 @@ async function launchProfile(profile) {
   // Add proxy server flag
   if (proxyUrl) {
     if (proxyUrl.includes('@')) {
-       // Requires authentication, anonymize it
-       try {
-         const proxyChain = await import('proxy-chain');
-         anonymizedProxyUrl = await proxyChain.anonymizeProxy(proxyUrl);
-         args.push(`--proxy-server=${anonymizedProxyUrl}`);
-       } catch (err) {
-         console.error('Failed to anonymize proxy:', err);
-         return { success: false, error: 'Failed to authenticate proxy: ' + err.message };
-       }
+      // Requires authentication, anonymize it
+      try {
+        const proxyChain = await import('proxy-chain');
+        anonymizedProxyUrl = await proxyChain.anonymizeProxy(proxyUrl);
+        args.push(`--proxy-server=${anonymizedProxyUrl}`);
+      } catch (err) {
+        console.error('Failed to anonymize proxy:', err);
+        return { success: false, error: 'Failed to authenticate proxy: ' + err.message };
+      }
     } else {
-       args.push(`--proxy-server=${proxyUrl}`);
+      args.push(`--proxy-server=${proxyUrl}`);
     }
   }
 
@@ -471,8 +480,8 @@ async function launchProfile(profile) {
           const lat = parseFloat(profile.proxyLat);
           const lon = parseFloat(profile.proxyLon);
           if (!isNaN(lat) && !isNaN(lon)) {
-            await page.setGeolocation({ latitude: lat, longitude: lon, accuracy: 100 }).catch(() => {});
-            
+            await page.setGeolocation({ latitude: lat, longitude: lon, accuracy: 100 }).catch(() => { });
+
             // Set up listener to auto-grant permission on navigation
             page.on('framenavigated', async (frame) => {
               if (frame === page.mainFrame()) {
@@ -480,9 +489,9 @@ async function launchProfile(profile) {
                   const url = page.url();
                   if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
                     const origin = new URL(url).origin;
-                    await browser.defaultBrowserContext().overridePermissions(origin, ['geolocation']).catch(() => {});
+                    await browser.defaultBrowserContext().overridePermissions(origin, ['geolocation']).catch(() => { });
                   }
-                } catch (err) {}
+                } catch (err) { }
               }
             });
           }
@@ -510,19 +519,19 @@ async function launchProfile(profile) {
     // Apply fingerprint to existing pages and close the extra blank tab
     const pages = await browser.pages();
     let closedBlank = false;
-    
+
     for (const page of pages) {
       try {
         const url = page.url();
         if (pages.length > 1 && !closedBlank && (url === 'about:blank' || url === 'chrome://newtab/')) {
           // Close the initial blank tab Puppeteer creates (only if restored tabs exist)
-          await page.close().catch(() => {});
+          await page.close().catch(() => { });
           closedBlank = true;
         } else {
           await setupPage(page);
           if (url === 'about:blank' || url === 'chrome://newtab/') {
             // Redirect the initial blank page to google.com
-            await page.goto('https://google.com').catch(() => {});
+            await page.goto('https://google.com').catch(() => { });
           }
         }
       } catch (e) {
@@ -556,7 +565,7 @@ async function closeBrowserEntry(entry) {
   try {
     if (entry.anonymizedProxyUrl) {
       const proxyChain = await import('proxy-chain');
-      await proxyChain.closeAnonymizedProxy(entry.anonymizedProxyUrl, true).catch(() => {});
+      await proxyChain.closeAnonymizedProxy(entry.anonymizedProxyUrl, true).catch(() => { });
     }
     if (entry.browser) {
       await entry.browser.close();
@@ -595,7 +604,7 @@ async function closeProfile(profileId) {
  * @param {Function} onLog
  * @returns {Object}
  */
-async function runPuppeteerScript(profileId, scriptCode, onLog = () => {}) {
+async function runPuppeteerScript(profileId, scriptCode, onLog = () => { }) {
   const entry = runningBrowsers.get(profileId);
   if (!entry) {
     return { success: false, error: 'Profile is not running. Open it first.' };
@@ -616,9 +625,9 @@ async function runPuppeteerScript(profileId, scriptCode, onLog = () => {}) {
       const lowerText = text.toLowerCase();
       // Filter out noisy Canvas2D warnings to keep console output clean
       if (
-        lowerText.includes('canvas2d') || 
-        lowerText.includes('willreadfrequently') || 
-        lowerText.includes('getimagedata') || 
+        lowerText.includes('canvas2d') ||
+        lowerText.includes('willreadfrequently') ||
+        lowerText.includes('getimagedata') ||
         lowerText.includes('will-read-frequently')
       ) {
         return;
@@ -707,10 +716,10 @@ async function startMultiControl(masterId, slaveIds) {
         let current = el;
         while (current && current.nodeType === Node.ELEMENT_NODE) {
           let selector = current.nodeName.toLowerCase();
-          
+
           const id = current.id;
           const isDynamicId = id && (/^(u_|mount_|jsc_|em_|js_|_|u_jsonp_)/.test(id) || (id.match(/\d/g) || []).length > 3);
-          
+
           if (id && !isDynamicId) {
             selector += '#' + id;
             path.unshift(selector);
@@ -722,7 +731,7 @@ async function startMultiControl(masterId, slaveIds) {
             if (classes.length > 0) {
               selector += '.' + classes.join('.');
             }
-            
+
             let sibling = current;
             let nth = 1;
             while (sibling = sibling.previousElementSibling) {
@@ -741,7 +750,7 @@ async function startMultiControl(masterId, slaveIds) {
         if (!e.isTrusted) return;
         const sel = getCssSelector(e.target);
         if (sel) {
-          window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'click', selector: sel }).catch(() => {});
+          window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'click', selector: sel }).catch(() => { });
         }
       }, true);
 
@@ -750,7 +759,7 @@ async function startMultiControl(masterId, slaveIds) {
         if (!e.isTrusted) return;
         const sel = getCssSelector(e.target);
         if (sel) {
-          window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'focus', selector: sel }).catch(() => {});
+          window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'focus', selector: sel }).catch(() => { });
         }
       }, true);
 
@@ -767,7 +776,7 @@ async function startMultiControl(masterId, slaveIds) {
             selector: sel,
             value: val,
             isContentEditable: isContentEditable
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }, true);
 
@@ -777,14 +786,14 @@ async function startMultiControl(masterId, slaveIds) {
         if (e.key === 'Enter') {
           const sel = getCssSelector(e.target);
           if (sel) {
-            window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'keypress', selector: sel, key: 'Enter' }).catch(() => {});
+            window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'keypress', selector: sel, key: 'Enter' }).catch(() => { });
           }
         }
       }, true);
 
       window.addEventListener('scroll', () => {
         if (window.isPerformingSyncAction) return;
-        window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'scroll', x: window.scrollX, y: window.scrollY }).catch(() => {});
+        window.onMasterEvent({ sourceId: window.multiControlSourceId, type: 'scroll', x: window.scrollX, y: window.scrollY }).catch(() => { });
       }, true);
     };
 
@@ -805,7 +814,7 @@ async function startMultiControl(masterId, slaveIds) {
             for (const targetId of targetProfileIds) {
               const targetEntry = runningBrowsers.get(targetId);
               if (!targetEntry) continue;
-              
+
               try {
                 const targetPages = await targetEntry.browser.pages();
                 const webpagePages = targetPages.filter(p => {
@@ -828,14 +837,14 @@ async function startMultiControl(masterId, slaveIds) {
                       el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
                     }
                     setTimeout(() => { window.isPerformingSyncAction = false; }, 50);
-                  }, event.selector).catch(() => {});
+                  }, event.selector).catch(() => { });
                 } else if (event.type === 'focus') {
                   await targetPage.evaluate((sel) => {
                     window.isPerformingSyncAction = true;
                     const el = document.querySelector(sel);
                     if (el) el.focus();
                     setTimeout(() => { window.isPerformingSyncAction = false; }, 50);
-                  }, event.selector).catch(() => {});
+                  }, event.selector).catch(() => { });
                 } else if (event.type === 'input') {
                   await targetPage.evaluate((sel, val, isCE) => {
                     window.isPerformingSyncAction = true;
@@ -857,7 +866,7 @@ async function startMultiControl(masterId, slaveIds) {
                       }
                     }
                     setTimeout(() => { window.isPerformingSyncAction = false; }, 50);
-                  }, event.selector, event.value, event.isContentEditable).catch(() => {});
+                  }, event.selector, event.value, event.isContentEditable).catch(() => { });
                 } else if (event.type === 'scroll') {
                   await targetPage.evaluate((x, y) => {
                     window.isPerformingSyncAction = true;
@@ -865,19 +874,19 @@ async function startMultiControl(masterId, slaveIds) {
                       window.scrollTo(x, y);
                     }
                     setTimeout(() => { window.isPerformingSyncAction = false; }, 50);
-                  }, event.x, event.y).catch(() => {});
+                  }, event.x, event.y).catch(() => { });
                 } else if (event.type === 'keypress' && event.key === 'Enter') {
                   await targetPage.evaluate((sel) => {
                     window.isPerformingSyncAction = true;
                     const el = document.querySelector(sel);
                     if (el) el.focus();
-                  }, event.selector).catch(() => {});
-                  await targetPage.keyboard.press('Enter').catch(() => {});
+                  }, event.selector).catch(() => { });
+                  await targetPage.keyboard.press('Enter').catch(() => { });
                   await targetPage.evaluate(() => {
                     window.isPerformingSyncAction = false;
-                  }).catch(() => {});
+                  }).catch(() => { });
                 }
-              } catch (err) {}
+              } catch (err) { }
             }
           });
         } catch (exposeErr) {
@@ -887,8 +896,8 @@ async function startMultiControl(masterId, slaveIds) {
         }
 
         // Inject listeners immediately and on navigation
-        await page.evaluate(injectSyncListenerScript, sourceProfileId).catch(() => {});
-        await page.evaluateOnNewDocument(injectSyncListenerScript, sourceProfileId).catch(() => {});
+        await page.evaluate(injectSyncListenerScript, sourceProfileId).catch(() => { });
+        await page.evaluateOnNewDocument(injectSyncListenerScript, sourceProfileId).catch(() => { });
 
         // Listen for navigation to sync url (avoid duplicates)
         if (!page.hasMultiControlSync) {
@@ -923,7 +932,7 @@ async function startMultiControl(masterId, slaveIds) {
                         }, 2500);
                       }
                     }
-                  } catch (err) {}
+                  } catch (err) { }
                 }
               }
             }
@@ -953,7 +962,7 @@ async function startMultiControl(masterId, slaveIds) {
             if (page) {
               await setupPageSync(page, profileId);
             }
-          } catch (err) {}
+          } catch (err) { }
         }
       };
 
@@ -965,7 +974,7 @@ async function startMultiControl(masterId, slaveIds) {
             if (page) {
               await setupPageSync(page, profileId);
             }
-          } catch (err) {}
+          } catch (err) { }
         }
       };
 
