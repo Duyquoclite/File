@@ -1,17 +1,20 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8">
   <title>Tiện ích Facebook</title>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      width: 340px;
+      width: 380px;
       margin: 0;
       padding: 12px;
       background-color: #f0f2f5;
       color: #1c1e21;
+      box-sizing: border-box;
     }
+
     h3 {
       margin-top: 0;
       font-size: 15px;
@@ -21,6 +24,7 @@
       padding-bottom: 8px;
       margin-bottom: 12px;
     }
+
     .section-title {
       font-size: 13px;
       font-weight: 600;
@@ -30,36 +34,40 @@
       align-items: center;
       gap: 6px;
     }
-    textarea, input[type="text"] {
+
+    textarea,
+    input[type="text"],
+    select {
       width: 100%;
       padding: 8px;
       box-sizing: border-box;
       border: 1px solid #ccd0d5;
       border-radius: 6px;
       outline: none;
+      font-family: inherit;
     }
+
     textarea {
-      height: 60px;
-      resize: vertical;
+      height: 64px;
+      resize: none;
       font-family: monospace;
       font-size: 11px;
-      margin-bottom: 8px;
+      margin-bottom: 0;
     }
+
     input[type="text"] {
       font-family: monospace;
       font-size: 12px;
-      margin-bottom: 8px;
+      margin-bottom: 0;
     }
-    textarea:focus, input[type="text"]:focus {
+
+    textarea:focus,
+    input[type="text"]:focus,
+    select:focus {
       border-color: #1877f2;
       box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2);
     }
-    .button-group {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
+
     button {
       width: 100%;
       padding: 8px 10px;
@@ -72,19 +80,40 @@
       font-size: 12px;
       transition: background-color 0.2s;
     }
+
     button:hover {
       background-color: #166fe5;
     }
+
     button#btnSet {
       background-color: #42b72a;
     }
+
     button#btnSet:hover {
       background-color: #36a420;
     }
+
+    button#addBtn {
+      background-color: #10b981;
+    }
+
+    button#addBtn:hover {
+      background-color: #059669;
+    }
+
+    button#btnClearCookies {
+      background-color: #ef4444;
+    }
+
+    button#btnClearCookies:hover {
+      background-color: #dc2626;
+    }
+
     .divider {
       border-top: 1px dashed #ccd0d5;
       margin: 10px 0;
     }
+
     #status {
       margin-top: 8px;
       font-size: 12px;
@@ -92,93 +121,179 @@
       min-height: 16px;
       font-weight: 500;
     }
-    .twofa-result-container {
+
+    /* Custom Dropdown styled select (Light Mode) */
+    .custom-select-wrapper {
+      position: relative;
+    }
+
+    .custom-select-trigger {
       display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 8px;
-      margin-top: 6px;
+      padding: 8px 12px;
+      border: 1px solid #ccd0d5;
+      border-radius: 6px;
+      background: white;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+      color: #1c1e21;
     }
-    .twofa-result-container input {
-      flex: 1;
-      text-align: center;
-      font-size: 16px;
-      font-weight: bold;
-      color: #1877f2;
-      background-color: #e7f3ff;
+
+    .custom-select-trigger:hover {
       border-color: #1877f2;
-      margin-bottom: 0;
-      letter-spacing: 2px;
-      padding: 6px;
     }
-    .scan-info-container {
+
+    .custom-select-menu {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
       background: white;
       border: 1px solid #ccd0d5;
       border-radius: 6px;
-      padding: 8px 10px;
-      font-size: 12px;
-      margin-bottom: 8px;
-      display: none;
+      margin-top: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
-    .scan-row {
+
+    .custom-select-item {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 4px;
+      align-items: center;
+      padding: 8px 12px;
+      font-size: 12px;
+      border-bottom: 1px solid #f0f2f5;
+      cursor: pointer;
     }
-    .scan-label {
-      color: #606770;
+
+    .custom-select-item:last-child {
+      border-bottom: none;
     }
-    .scan-val {
-      font-weight: 600;
+
+    .custom-select-item:hover {
+      background-color: #f0f2f5;
+    }
+
+    .custom-select-item .item-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: #1c1e21;
+      text-align: left;
     }
-    .badge {
-      padding: 2px 6px;
+
+    .custom-select-item .item-delete {
+      background: #ffebe9;
+      color: #d93025;
+      border: none;
       border-radius: 4px;
+      padding: 2px 6px;
       font-size: 10px;
       font-weight: bold;
+      cursor: pointer;
+      margin-left: 8px;
+      width: auto;
+      transition: all 0.2s;
     }
-    .badge-active { background-color: #e7f3ff; color: #1877f2; }
-    .badge-die { background-color: #ffebe9; color: #d93025; }
+
+    .custom-select-item .item-delete:hover {
+      background: #d93025;
+      color: white;
+    }
   </style>
 </head>
+
 <body>
   <h3>Tiện ích Facebook</h3>
-  
-  <!-- Đăng nhập nhanh -->
-  <div class="section-title">⚡ Đăng nhập nhanh (UID|Pass|2FA|Cookie)</div>
-  <textarea id="quickLoginInput" placeholder="Dán định dạng: UID|Pass|2FA|Cookie... hoặc chỉ Cookie"></textarea>
-  <button id="btnQuickLogin" style="background-color: #eab308; margin-bottom: 8px;">ĐĂNG NHẬP NHANH</button>
 
-  <div class="divider"></div>
-
-  <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+  <!-- Cookie Management -->
+  <div class="section-title"
+    style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 6px;">
     <span>🔑 Quản lý Cookie</span>
-    <select id="cookieFormatSelect" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid #ccd0d5; background: white; outline: none; cursor: pointer;">
+    <select id="cookieFormatSelect"
+      style="font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid #ccd0d5; background: white; outline: none; cursor: pointer; width: auto;">
       <option value="raw">RAW</option>
       <option value="json">JSON</option>
     </select>
   </div>
-  <textarea id="cookieInput" placeholder="Dán cookie vào đây..."></textarea>
-  <div class="button-group">
-    <button id="btnGet">NHẬN Cookie</button>
-    <button id="btnSet">ĐẶT Cookie</button>
+  <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+    <div style="flex: 1;">
+      <textarea id="cookieInput" placeholder="Dán cookie vào đây..."></textarea>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px; width: 110px; justify-content: space-between;">
+      <button id="btnGet" style="padding: 4px; font-size: 11px;">NHẬN Cookie</button>
+      <button id="btnSet" style="padding: 4px; font-size: 11px;">ĐẶT Cookie</button>
+      <button id="btnClearCookies" style="background-color: #dc2626; color: white; padding: 4px; font-size: 11px;">XÓA Cookie</button>
+    </div>
   </div>
 
   <div class="divider"></div>
 
   <!-- 2FA -->
-  <div class="section-title">🛡️ Lấy mã 2FA</div>
-  <input type="text" id="twofaKeyInput" placeholder="Nhập khóa bảo mật 2FA (secret key)..." autocomplete="off">
-  <button id="btnGet2FA" style="background-color: #8b5cf6;">LẤY MÃ 2FA</button>
-  
-  <div class="twofa-result-container" id="twofaResultDiv" style="display: none;">
-    <input type="text" id="twofaCodeOutput" readonly>
+  <div class="section-title" style="margin-bottom: 6px;">🛡️ Lấy mã 2FA</div>
+  <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+    <input type="text" id="twofaKeyInput" placeholder="Khóa bảo mật 2FA..." autocomplete="off"
+      style="height: 33px; box-sizing: border-box;">
+    <button id="btnGet2FA" style="background-color: #8b5cf6; width: 110px; height: 33px; padding: 4px;">LẤY MÃ
+      2FA</button>
   </div>
 
-  <button id="btnClearCookies" style="background-color: #ef4444; margin-top: 4px;">XÓA COOKIE FACEBOOK</button>
+  <div class="divider"></div>
+
+  <!-- Check Mail -->
+  <div class="section-title" style="margin-bottom: 6px;">✉️ Check Thư Outlook</div>
+  <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+    <input type="text" id="mailTokenInput" placeholder="Dán token mail (M.C...)..." autocomplete="off"
+      style="height: 33px; box-sizing: border-box;">
+    <button id="btnCheckMail" style="background-color: #0284c7; width: 110px; height: 33px; padding: 4px;">CHECK THƯ</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Liên kết nhanh -->
+  <div class="section-title" style="margin-bottom: 6px;">🔗 Liên kết nhanh</div>
+  <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+    <div class="custom-select-wrapper" style="flex: 1; margin-bottom: 0;">
+      <div id="linkSelectTrigger" class="custom-select-trigger" style="height: 33px; box-sizing: border-box;">
+        <span id="selectedLinkText">-- Chọn liên kết nhanh --</span>
+        <span>▼</span>
+      </div>
+      <div id="linkSelectMenu" class="custom-select-menu" style="display: none;"></div>
+    </div>
+    <button id="addBtn" style="width: 110px; height: 33px; padding: 4px; margin-bottom: 0;">➕ THÊM</button>
+  </div>
+
+
+
+  <!-- Modal hiển thị danh sách và chi tiết thư -->
+  <div id="mailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; box-sizing: border-box; padding: 10px;">
+    <div style="background: white; width: 100%; height: 100%; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 4px 12px rgba(0,0,0,0.15); overflow: hidden;">
+      <!-- Header -->
+      <div style="padding: 10px; background: #0284c7; color: white; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 13px;">
+        <span id="mailModalTitle">Danh sách thư</span>
+        <button id="btnMailModalClose" style="background: none; border: none; color: white; font-size: 16px; font-weight: bold; cursor: pointer; width: auto; padding: 0 5px;">✕</button>
+      </div>
+      <!-- List View -->
+      <div id="mailListContainer" style="flex: 1; overflow-y: auto; padding: 6px;">
+        <!-- Mails will be rendered here -->
+      </div>
+      <!-- Detail View (hidden by default) -->
+      <div id="mailDetailContainer" style="flex: 1; overflow-y: auto; padding: 10px; display: none; background: #f8fafc; font-size: 12px; height: calc(100% - 40px); box-sizing: border-box;">
+        <button id="btnBackToMailList" style="background: #64748b; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 11px; margin-bottom: 8px; cursor: pointer; width: auto; font-weight: bold;">← Quay lại</button>
+        <div id="mailDetailSubject" style="font-weight: bold; font-size: 13px; margin-bottom: 4px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; color: #0f172a;"></div>
+        <iframe id="mailDetailIframe" style="width: 100%; height: calc(100% - 35px); border: none; background: white; border-radius: 4px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);"></iframe>
+      </div>
+    </div>
+  </div>
 
   <div id="status"></div>
-  
+
   <script src="popup.js"></script>
 </body>
+
 </html>
