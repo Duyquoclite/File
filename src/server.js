@@ -27,9 +27,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/profiles', require('./backend/routes/profiles'));
 app.use('/api/automation', require('./backend/routes/automation'));
 app.use('/api/proxy', require('./backend/routes/proxy'));
-app.use('/api/support', require('./backend/routes/support'));
 app.use('/api/update', require('./backend/routes/update'));
 app.use('/api/extensions', require('./backend/routes/extensions'));
+app.use('/api/quick-links', require('./backend/routes/quickLinks'));
 
 // ====== WebSocket for real-time logs ======
 const wss = new WebSocketServer({ server, path: '/ws' });
@@ -339,6 +339,14 @@ const autoUpdater = require('./backend/services/autoUpdater');
   ║   WebSocket at ws://localhost:${PORT}/ws            ║
   ╚══════════════════════════════════════════════════╝
     `);
+    
+    // Start Telegram polling
+    try {
+      const telegramPollService = require('./backend/services/telegramPollService');
+      telegramPollService.startPolling(app);
+    } catch (tgErr) {
+      console.error('[TG POLL] Failed to load or start telegram poll service:', tgErr.message);
+    }
   });
 
 })();
