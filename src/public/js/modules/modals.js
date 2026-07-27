@@ -1214,6 +1214,35 @@ export function setupModalEventListeners() {
     };
   }
 
+  const btnBulkSaveTelegram = document.getElementById('btnBulkSaveTelegram');
+  if (btnBulkSaveTelegram) {
+    btnBulkSaveTelegram.onclick = async () => {
+      const selected = Array.from(state.selectedIds);
+      if (selected.length === 0) {
+        toast('Vui lòng chọn ít nhất 1 profile!', 'error');
+        return;
+      }
+      
+      toast('Đang gửi dữ liệu lên Telegram...', 'info');
+      try {
+        const res = await api('/profiles/save-to-telegram', {
+          method: 'POST',
+          body: { ids: selected }
+        });
+        if (res.success) {
+          toast(res.message || 'Lưu lên Telegram thành công!', 'success');
+          state.selectedIds.clear();
+          updateBulkUI();
+          renderProfiles();
+        } else {
+          toast(res.error || 'Lỗi lưu Telegram', 'error');
+        }
+      } catch (err) {
+        toast(err.message || 'Lỗi kết nối tới server', 'error');
+      }
+    };
+  }
+
   const btnStartMultiControl = document.getElementById('btnStartMultiControl');
   const btnStopMultiControl = document.getElementById('btnStopMultiControl');
 
@@ -1444,6 +1473,11 @@ export function setupModalEventListeners() {
     };
   }
 
+  // Mail Checker Modal state variables
+  let mailCheckerAccounts = [];
+  let showDieMails = false;
+  let isCheckingAllMails = false;
+
   // Mail Checker Modal events
   const btnMailChecker = document.getElementById('btnMailChecker');
   if (btnMailChecker) {
@@ -1463,6 +1497,22 @@ export function setupModalEventListeners() {
 
   const btnCloseMailCheckerModal = document.getElementById('btnCloseMailCheckerModal');
   if (btnCloseMailCheckerModal) btnCloseMailCheckerModal.onclick = () => closeModal('mailCheckerModal');
+
+  // Check all mails event trigger
+  const btnCheckAllMails = document.getElementById('btnCheckAllMails');
+  if (btnCheckAllMails) {
+    btnCheckAllMails.onclick = checkAllMails;
+  }
+
+  // Toggle die accounts event trigger
+  const btnToggleDieMails = document.getElementById('btnToggleDieMails');
+  if (btnToggleDieMails) {
+    btnToggleDieMails.onclick = () => {
+      showDieMails = !showDieMails;
+      btnToggleDieMails.textContent = showDieMails ? 'Ẩn Mail Die' : 'Hiện Mail Die';
+      renderAccountsUI();
+    };
+  }
 
   // Import Overlay triggers
   const btnImportAccounts = document.getElementById('btnImportAccounts');
@@ -1491,18 +1541,21 @@ export function setupModalEventListeners() {
       const rawText = txtImportList ? txtImportList.value : '';
       localStorage.setItem('mailCheckerRawText', rawText);
       
+      // Reset statuses when importing new accounts
+      showDieMails = false;
+      if (btnToggleDieMails) btnToggleDieMails.style.display = 'none';
+      const mailCheckStatusText = document.getElementById('mailCheckStatusText');
+      if (mailCheckStatusText) mailCheckStatusText.textContent = 'Chưa check';
+
       renderParsedAccounts(rawText);
       importOverlay.style.display = 'none';
     };
   }
 
-  // Render accounts list function
+  // Parse accounts list function
   function renderParsedAccounts(rawText) {
-    const listContainer = document.getElementById('accountsListContainer');
-    if (!listContainer) return;
-
     const lines = rawText.split('\n');
-    const accounts = [];
+    mailCheckerAccounts = [];
     let lineIdx = 0;
     
     for (let line of lines) {
@@ -1512,27 +1565,80 @@ export function setupModalEventListeners() {
       if (line.includes('|')) {
         const parts = line.split('|');
         if (parts.length >= 3) {
-          const email = parts[0].trim();
-          const password = parts[1].trim();
-          const token = parts[2].trim();
-          const clientId = parts[3] ? parts[3].trim() : '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+          let email = parts[0].trim();
+          let password = parts[1].trim();
+          let token = parts[2].trim();
+          let clientId = parts[3] ? parts[3].trim() : '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+
+          // Nếu phần tử đầu tiên chỉ chứa số (thứ tự dòng), dịch chuyển các phần tử sau lên
+          if (/^\d+$/.test(email) && parts.length >= 4) {
+            email = parts[1].trim();
+            password = parts[2].trim();
+            token = parts[3].trim();
+            clientId = parts[4] ? parts[4].trim() : '9e5f94bc-e8a4-4e73-b8be-63364c29d753';
+          }
+
+          // Loại bỏ tiền tố số dòng dạng "1. ", "1) ", "1: ", "1 - " ở đầu email
+          email = email.replace(/^\d+[\s.)\-:]+/, '').trim();
+
           if (email && token) {
-            accounts.push({ index: lineIdx, email, password, token, clientId });
+            mailCheckerAccounts.push({ index: lineIdx, email, password, token, clientId, status: 'unchecked' });
           }
         }
       }
     }
 
-    if (accounts.length === 0) {
+    // Tự động định dạng lại danh sách dán vào thành chuẩn số thứ tự và lưu lại
+    const formattedRawText = mailCheckerAccounts.map((acc, idx) => {
+      acc.index = idx + 1; // reset index theo thứ tự số
+      return `${acc.index}. ${acc.email}|${acc.password}|${acc.token}|${acc.clientId}`;
+    }).join('\n');
+    
+    localStorage.setItem('mailCheckerRawText', formattedRawText);
+    const txtImportList = document.getElementById('txtImportList');
+    if (txtImportList) txtImportList.value = formattedRawText;
+
+    renderAccountsUI();
+  }
+
+  // Render accounts list function
+  function renderAccountsUI() {
+    const listContainer = document.getElementById('accountsListContainer');
+    if (!listContainer) return;
+
+    if (mailCheckerAccounts.length === 0) {
       listContainer.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:0.8rem;">Không tìm thấy tài khoản hợp lệ. Bấm "Nhập List" để thử lại.</div>';
       return;
     }
 
-    listContainer.innerHTML = accounts.map((acc, index) => {
+    // Filter accounts depending on showDieMails state
+    const filteredAccounts = mailCheckerAccounts.filter(acc => {
+      if (acc.status === 'die') {
+        return showDieMails; // Only show die accounts if showDieMails is true
+      }
+      return true; // Show unchecked/live/checking accounts
+    });
+
+    if (filteredAccounts.length === 0) {
+      listContainer.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:0.8rem;">Danh sách trống (Tất cả tài khoản DIE đã ẩn).</div>';
+      return;
+    }
+
+    listContainer.innerHTML = filteredAccounts.map((acc, index) => {
+      let statusBadge = '';
+      if (acc.status === 'live') {
+        statusBadge = `<span style="padding: 1px 4px; border-radius: 4px; font-size: 0.6rem; font-weight: bold; background: #e6f4ea; color: #137333; margin-left: 6px;">LIVE</span>`;
+      } else if (acc.status === 'die') {
+        statusBadge = `<span style="padding: 1px 4px; border-radius: 4px; font-size: 0.6rem; font-weight: bold; background: #ffebe9; color: #d93025; margin-left: 6px;">DIE</span>`;
+      } else if (acc.status === 'checking') {
+        statusBadge = `<span style="padding: 1px 4px; border-radius: 4px; font-size: 0.6rem; font-weight: bold; background: #fff8e1; color: #b78103; margin-left: 6px; animation: blink 1s infinite;">CHECKING...</span>`;
+      }
+
       return `
-        <div class="account-item" data-index="${index}" style="padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 4px;">
-          <div style="font-weight: 600; font-size: 0.8rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            ${index + 1}. ${esc(acc.email)}
+        <div class="account-item ${acc.status}" data-mail-index="${acc.index}" style="padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 4px;">
+          <div style="font-weight: 600; font-size: 0.8rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; justify-content: space-between; align-items: center;">
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${acc.index}. ${esc(acc.email)}</span>
+            ${statusBadge}
           </div>
           <div style="font-size: 0.7rem; color: var(--text-muted);">
             <span>Pass: ${esc(acc.password)}</span>
@@ -1566,13 +1672,112 @@ export function setupModalEventListeners() {
         item.style.background = 'rgba(99,102,241,0.08)';
         item.style.borderLeft = '3px solid var(--accent)';
 
-        const accIndex = parseInt(item.dataset.index);
-        const account = accounts[accIndex];
-        
-        // Load mailbox for this account
-        await loadMailboxForAccount(account);
+        const mailIdx = parseInt(item.dataset.mailIndex);
+        const account = mailCheckerAccounts.find(a => a.index === mailIdx);
+        if (account) {
+          // Load mailbox for this account
+          await loadMailboxForAccount(account);
+        }
       };
     });
+  }
+
+  // Update raw text and sort DIE accounts to the bottom
+  function updateRawTextAfterCheck() {
+    const liveAccounts = mailCheckerAccounts.filter(acc => acc.status !== 'die');
+    const dieAccounts = mailCheckerAccounts.filter(acc => acc.status === 'die');
+    
+    const sortedAccounts = [...liveAccounts, ...dieAccounts];
+    
+    // Tạo lại nội dung text với định dạng số thứ tự "1. mail|pass|token|client"
+    const newRawText = sortedAccounts.map((acc, idx) => {
+      return `${idx + 1}. ${acc.email}|${acc.password}|${acc.token}|${acc.clientId}`;
+    }).join('\n');
+    
+    localStorage.setItem('mailCheckerRawText', newRawText);
+    const txtImportList = document.getElementById('txtImportList');
+    if (txtImportList) txtImportList.value = newRawText;
+    
+    // Cập nhật lại thuộc tính index hiển thị
+    sortedAccounts.forEach((acc, idx) => {
+      acc.index = idx + 1;
+    });
+    
+    mailCheckerAccounts = sortedAccounts;
+  }
+
+  // Check all mails function
+  async function checkAllMails() {
+    if (isCheckingAllMails || mailCheckerAccounts.length === 0) return;
+    isCheckingAllMails = true;
+    
+    const btnCheckAllMails = document.getElementById('btnCheckAllMails');
+    const mailCheckStatusText = document.getElementById('mailCheckStatusText');
+    const btnToggleDieMails = document.getElementById('btnToggleDieMails');
+
+    if (btnCheckAllMails) {
+      btnCheckAllMails.disabled = true;
+      btnCheckAllMails.textContent = '⏳ Checking...';
+    }
+
+    let liveCount = 0;
+    let dieCount = 0;
+
+    for (let i = 0; i < mailCheckerAccounts.length; i++) {
+      const acc = mailCheckerAccounts[i];
+      acc.status = 'checking';
+      renderAccountsUI();
+      if (mailCheckStatusText) {
+        mailCheckStatusText.textContent = `Đang check: ${i + 1}/${mailCheckerAccounts.length}...`;
+      }
+
+      try {
+        const response = await api('/profiles/mail-checker/list', {
+          method: 'POST',
+          body: { token: acc.token, clientId: acc.clientId }
+        });
+
+        if (response.success) {
+          acc.status = 'live';
+          liveCount++;
+        } else {
+          acc.status = 'die';
+          dieCount++;
+        }
+      } catch (err) {
+        acc.status = 'die';
+        dieCount++;
+      }
+      
+      // Delay to avoid flooding
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    isCheckingAllMails = false;
+    if (btnCheckAllMails) {
+      btnCheckAllMails.disabled = false;
+      btnCheckAllMails.textContent = '⚡ Check Mail';
+    }
+
+    if (mailCheckStatusText) {
+      mailCheckStatusText.textContent = `Live: ${liveCount} | Die: ${dieCount}`;
+    }
+
+    // Toggle button visibility if there are dead mails
+    if (btnToggleDieMails) {
+      if (dieCount > 0) {
+        btnToggleDieMails.style.display = 'block';
+        btnToggleDieMails.textContent = showDieMails ? 'Ẩn Mail Die' : 'Hiện Mail Die';
+      } else {
+        btnToggleDieMails.style.display = 'none';
+      }
+    }
+
+    // Đẩy mail die xuống cuối danh sách và cập nhật raw text trong localStorage/textarea
+    updateRawTextAfterCheck();
+    
+    // Re-render UI to apply hide/show logic on die accounts
+    renderAccountsUI();
   }
 
   // Load mailbox function
@@ -1698,7 +1903,6 @@ export function setupModalEventListeners() {
       });
 
     } catch (err) {
-      if (listContainer) listContainer.innerHTML = `<div style="padding:24px; color:#ea868f; text-align:center; font-weight:bold; font-size:0.8rem;">Lỗi kết nối: ${esc(err.message)}</div>`;
     }
   }
 }
