@@ -428,10 +428,241 @@ function getFacebookUserId(profileId) {
   }
 }
 
+/**
+ * Export and decrypt ALL cookies for a profile.
+ */
+function exportAllCookies(profileId) {
+  const dbPath = getCookiesDatabasePath(profileId);
+  if (!dbPath) return [];
+
+  const tempPath = path.join(PROFILES_DIR, profileId, `Cookies_export_${Date.now()}_temp`);
+  let db;
+  try {
+    try {
+      fs.copyFileSync(dbPath, tempPath);
+      db = new Database(tempPath, { readonly: true });
+    } catch (copyErr) {
+      db = new Database(dbPath, { readonly: true, timeout: 1000 });
+    }
+
+    const rows = db.prepare('SELECT * FROM cookies').all();
+    db.close();
+    db = null;
+
+    let aesKey;
+    try {
+      aesKey = getCookieMasterKey(profileId);
+    } catch (e) {
+      console.warn('[CookieService] Failed to decrypt master key for export:', e.message);
+    }
+
+    const decryptedCookies = rows.map(row => {
+      let decryptedValue = '';
+      const encVal = row.encrypted_value;
+
+      if (aesKey && encVal && encVal.length > 0) {
+        const prefix = encVal.slice(0, 3).toString('ascii');
+        if (prefix === 'v10' || prefix === 'v11') {
+          try {
+            const iv = encVal.slice(3, 15);
+            const ciphertext = encVal.slice(15, encVal.length - 16);
+            const tag = encVal.slice(encVal.length - 16);
+
+            const decipher = crypto.createDecipheriv('aes-256-gcm', aesKey, iv);
+            decipher.setAuthTag(tag);
+            let decBuf = decipher.update(ciphertext);
+            decBuf = Buffer.concat([decBuf, decipher.final()]);
+
+            // Strip 32-byte SHA-256 hash of domain if it is present
+            if (decBuf.length > 32) {
+              const sha256 = crypto.createHash('sha256').update(row.host_key).digest();
+              if (decBuf.slice(0, 32).equals(sha256)) {
+                decryptedValue = decBuf.slice(32).toString('utf8');
+              } else {
+                decryptedValue = decBuf.toString('utf8');
+              }
+            } else {
+              decryptedValue = decBuf.toString('utf8');
+            }
+          } catch (decErr) {
+            console.error('[CookieService] Export GCM Decryption failed:', row.name, decErr.message);
+            decryptedValue = row.value || '';
+          }
+        } else {
+          decryptedValue = row.value || '';
+        }
+      } else {
+        decryptedValue = row.value || '';
+      }
+
+      return {
+        creation_utc: row.creation_utc,
+        host_key: row.host_key,
+        top_frame_site_key: row.top_frame_site_key || '',
+        name: row.name,
+        value: decryptedValue,
+        path: row.path,
+        expires_utc: row.expires_utc,
+        is_secure: row.is_secure,
+        is_httponly: row.is_httponly,
+        last_access_utc: row.last_access_utc,
+        has_expires: row.has_expires,
+        is_persistent: row.is_persistent,
+        priority: row.priority,
+        samesite: row.samesite,
+        source_scheme: row.source_scheme,
+        source_port: row.source_port,
+        last_update_utc: row.last_update_utc,
+        source_type: row.source_type,
+        has_cross_site_ancestor: row.has_cross_site_ancestor
+      };
+    });
+
+    return decryptedCookies;
+  } catch (err) {
+    console.error(`[CookieService] Error exporting all cookies for ${profileId}:`, err);
+    return [];
+  } finally {
+    if (db) {
+      try { db.close(); } catch (_) {}
+    }
+    if (fs.existsSync(tempPath)) {
+      try { fs.unlinkSync(tempPath); } catch (_) {}
+    }
+  }
+}
+
+/**
+ * Encrypt and import ALL cookies for a profile.
+ */
+function importAllCookies(profileId, cookies) {
+  const dbPath = getCookiesDatabasePath(profileId);
+  const activeDbPath = dbPath || path.join(PROFILES_DIR, profileId, 'Default', 'Network', 'Cookies');
+  
+  if (!fs.existsSync(activeDbPath)) {
+    const parentDir = path.dirname(activeDbPath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+    // We create an empty sqlite database schema if cookies DB is completely missing.
+    // However, usually it is present. If it is missing, we create a basic schema or skip.
+    // Let's create it dynamically with sqlite tables.
+  }
+
+  let aesKey;
+  try {
+    aesKey = getCookieMasterKey(profileId);
+  } catch (e) {
+    console.error('[CookieService] Cannot import cookies: master key decryption failed.', e.message);
+    return;
+  }
+
+  let db;
+  try {
+    db = new Database(activeDbPath);
+    db.pragma('journal_mode = WAL');
+    
+    // Create the cookies table if not exists (in case it is a new/blank Cookies database)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS cookies (
+        creation_utc INTEGER NOT NULL,
+        host_key TEXT NOT NULL,
+        top_frame_site_key TEXT NOT NULL,
+        name TEXT NOT NULL,
+        value TEXT NOT NULL,
+        encrypted_value BLOB NOT NULL,
+        path TEXT NOT NULL,
+        expires_utc INTEGER NOT NULL,
+        is_secure INTEGER NOT NULL,
+        is_httponly INTEGER NOT NULL,
+        last_access_utc INTEGER NOT NULL,
+        has_expires INTEGER NOT NULL,
+        is_persistent INTEGER NOT NULL,
+        priority INTEGER NOT NULL,
+        samesite INTEGER NOT NULL,
+        source_scheme INTEGER NOT NULL,
+        source_port INTEGER NOT NULL,
+        last_update_utc INTEGER NOT NULL,
+        source_type INTEGER NOT NULL,
+        has_cross_site_ancestor INTEGER NOT NULL,
+        PRIMARY KEY (creation_utc)
+      )
+    `);
+
+    // Clear existing cookies
+    db.prepare('DELETE FROM cookies').run();
+
+    const insertStmt = db.prepare(`
+      INSERT OR REPLACE INTO cookies (
+        creation_utc, host_key, top_frame_site_key, name, value, encrypted_value, path,
+        expires_utc, is_secure, is_httponly, last_access_utc, has_expires, is_persistent,
+        priority, samesite, source_scheme, source_port, last_update_utc, source_type, has_cross_site_ancestor
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const executeImport = db.transaction((cookiesToImport) => {
+      for (const c of cookiesToImport) {
+        const cDomain = c.host_key || '';
+        const cName = c.name || '';
+        const cValue = c.value || '';
+        
+        const sha256 = crypto.createHash('sha256').update(cDomain).digest();
+        const plaintext = Buffer.concat([sha256, Buffer.from(cValue, 'utf8')]);
+
+        const iv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv('aes-256-gcm', aesKey, iv);
+        const enc1 = cipher.update(plaintext);
+        const enc2 = cipher.final();
+        const ciphertext = Buffer.concat([enc1, enc2]);
+        const tag = cipher.getAuthTag();
+
+        const encryptedValue = Buffer.concat([
+          Buffer.from('v10', 'ascii'),
+          iv,
+          ciphertext,
+          tag
+        ]);
+
+        insertStmt.run(
+          c.creation_utc || ((Date.now() * 1000) + 11644473600000000),
+          cDomain,
+          c.top_frame_site_key || '',
+          cName,
+          '', // value
+          encryptedValue,
+          c.path || '/',
+          c.expires_utc || 0,
+          c.is_secure !== undefined ? c.is_secure : 1,
+          c.is_httponly !== undefined ? c.is_httponly : 1,
+          c.last_access_utc || ((Date.now() * 1000) + 11644473600000000),
+          c.has_expires !== undefined ? c.has_expires : 1,
+          c.is_persistent !== undefined ? c.is_persistent : 1,
+          c.priority !== undefined ? c.priority : 1,
+          c.samesite !== undefined ? c.samesite : 1,
+          c.source_scheme !== undefined ? c.source_scheme : 2,
+          c.source_port !== undefined ? c.source_port : 443,
+          c.last_update_utc || ((Date.now() * 1000) + 11644473600000000),
+          c.source_type !== undefined ? c.source_type : 1,
+          c.has_cross_site_ancestor !== undefined ? c.has_cross_site_ancestor : 1
+        );
+      }
+    });
+
+    executeImport(cookies);
+    console.log(`[CookieService] Successfully imported and encrypted ${cookies.length} cookies for profile ${profileId}`);
+  } catch (err) {
+    console.error(`[CookieService] Error importing cookies for ${profileId}:`, err);
+  } finally {
+    if (db) db.close();
+  }
+}
+
 module.exports = {
   getCookiesList,
   getCookiesForDomain,
   saveCookiesForDomain,
-  getFacebookUserId
+  getFacebookUserId,
+  exportAllCookies,
+  importAllCookies
 };
 
