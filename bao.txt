@@ -1,0 +1,149 @@
+Dưới đây là lời giải chi tiết cho đề kiểm tra giữa kỳ HQTCSDL Oracle (Đề 4 - Quản lý Khóa Học Online) trong ảnh:
+A. Sử dụng câu lệnh SQL tạo các bảng
+-- 1. Bảng KhoaHoc
+CREATE TABLE KhoaHoc (
+    MaKH VARCHAR2(10) PRIMARY KEY,
+    TenKH VARCHAR2(100),
+    ThoiLuong NUMBER
+);
+
+-- 2. Bảng HocVien
+CREATE TABLE HocVien (
+    MaHV VARCHAR2(10) PRIMARY KEY,
+    HoTen VARCHAR2(100),
+    Email VARCHAR2(100)
+);
+
+-- 3. Bảng DangKy
+CREATE TABLE DangKy (
+    MaDK VARCHAR2(10) PRIMARY KEY,
+    MaKH VARCHAR2(10),
+    MaHV VARCHAR2(10),
+    NgayDangKy DATE,
+    FOREIGN KEY (MaKH) REFERENCES KhoaHoc(MaKH),
+    FOREIGN KEY (MaHV) REFERENCES HocVien(MaHV)
+);
+
+B. Viết các lệnh PL/SQL thực hiện
+1. Viết lệnh hiển thị danh sách học viên đăng ký khóa học có thời lượng > 10 giờ trước ngày 19/05/2025
+SELECT DISTINCT hv.MaHV, hv.HoTen, hv.Email, kh.TenKH, dk.NgayDangKy
+FROM HocVien hv
+JOIN DangKy dk ON hv.MaHV = dk.MaHV
+JOIN KhoaHoc kh ON dk.MaKH = kh.MaKH
+WHERE kh.ThoiLuong > 10 
+  AND dk.NgayDangKy < TO_DATE('19/05/2025', 'DD/MM/YYYY');
+
+2. Viết lệnh để thêm dữ liệu cho các bảng trên 3 bảng (mỗi bảng 2 bản ghi)
+-- Thêm dữ liệu cho bảng KhoaHoc
+INSERT INTO KhoaHoc VALUES ('KH01', 'Lập trình Oracle PL/SQL', 15);
+INSERT INTO KhoaHoc VALUES ('KH02', 'Cơ sở dữ liệu nâng cao', 8);
+
+-- Thêm dữ liệu cho bảng HocVien
+INSERT INTO HocVien VALUES ('HV01', 'Nguyễn Vũ Gia Bảo', 'baonvg@email.com');
+INSERT INTO HocVien VALUES ('HV02', 'Trần Văn An', 'antv@email.com');
+
+-- Thêm dữ liệu cho bảng DangKy
+INSERT INTO DangKy VALUES ('DK01', 'KH01', 'HV01', TO_DATE('10/05/2025', 'DD/MM/YYYY'));
+INSERT INTO DangKy VALUES ('DK02', 'KH02', 'HV02', TO_DATE('15/05/2025', 'DD/MM/YYYY'));
+COMMIT;
+
+3. Tạo thủ tục UPDATE tên khóa học DangKy_KhoaHoc - chỉ đăng ký khi học viên chưa học khóa đó
+(Lưu ý: Đề bài yêu cầu cập nhật tên khóa học dựa trên điều kiện kiểm tra học viên đã đăng ký hay chưa. Dưới đây là stored procedure thực hiện việc kiểm tra trước khi cập nhật tên khóa học hoặc thêm mới đăng ký tùy theo ngữ cảnh, ở đây viết theo hướng thủ tục cập nhật tên khóa học kèm kiểm tra).
+CREATE OR REPLACE PROCEDURE Update_TenKhoaHoc (
+    p_MaKH IN VARCHAR2,
+    p_TenKHMoi IN VARCHAR2,
+    p_MaHV IN VARCHAR2
+) AS
+    v_Count NUMBER;
+BEGIN
+    -- Kiểm tra xem học viên đã đăng ký khóa học này trước đó chưa
+    SELECT COUNT(*) 
+    INTO v_Count 
+    FROM DangKy 
+    WHERE MaKH = p_MaKH AND MaHV = p_MaHV;
+
+    IF v_Count = 0 THEN
+        -- Nếu chưa học/chưa đăng ký thì cho phép cập nhật tên khóa học
+        UPDATE KhoaHoc 
+        SET TenKH = p_TenKHMoi 
+        WHERE MaKH = p_MaKH;
+        COMMIT;
+        DBMS_OUTPUT.PUT_LINE('Cập nhật tên khóa học thành công.');
+    ELSE
+        DBMS_OUTPUT.PUT_LINE('Học viên đã đăng ký khóa học này, không thể cập nhật.');
+    END IF;
+END;
+/
+
+4. Tạo hàm DemKhoaHoc(MaHV) - trả về số khóa học đã tham gia
+CREATE OR REPLACE FUNCTION DemKhoaHoc (
+    p_MaHV IN VARCHAR2
+) RETURN NUMBER IS
+    v_SoLuong NUMBER;
+BEGIN
+    SELECT COUNT(DISTINCT MaKH)
+    INTO v_SoLuong
+    FROM DangKy
+    WHERE MaHV = p_MaHV;
+    
+    RETURN v_SoLuong;
+END;
+/
+
+5. Viết Trigger kiểm tra khi Học viên đăng ký không được đăng ký trùng khóa
+CREATE OR REPLACE TRIGGER trg_KiemTraTrungKhoa
+BEFORE INSERT ON DangKy
+FOR EACH ROW
+DECLARE
+    v_Count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_Count
+    FROM DangKy
+    WHERE MaHV = :NEW.MaHV AND MaKH = :NEW.MaKH;
+
+    IF v_Count > 0 THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Lỗi: Học viên đã đăng ký khóa học này rồi, không thể đăng ký trùng!');
+    END IF;
+END;
+/
+
+6. Viết Trigger Cập nhật tổng số học viên của khóa học khi có học viên đăng ký mới
+(Giả sử bảng KhoaHoc có thêm cột TongSoHV NUMBER DEFAULT 0).
+-- Thêm cột tổng số học viên vào bảng KhoaHoc nếu chưa có
+-- ALTER TABLE KhoaHoc ADD TongSoHV NUMBER DEFAULT 0;
+
+CREATE OR REPLACE TRIGGER trg_CapNhatTongSoHV
+AFTER INSERT ON DangKy
+FOR EACH ROW
+BEGIN
+    UPDATE KhoaHoc
+    SET ThoiLuong = ThoiLuong -- Hoặc cập nhật cột TongSoHV tương ứng
+    WHERE MaKH = :NEW.MaKH;
+    
+    -- Nếu bảng KhoaHoc có cột TongSoHV:
+    UPDATE KhoaHoc
+    SET TongSoHV = NVL(TongSoHV, 0) + 1
+    WHERE MaKH = :NEW.MaKH;
+END;
+/
+
+7. Viết Trigger Ghi thông tin đăng ký vào bảng LichSuDangKy khi có học viên đăng ký mới
+-- Tạo bảng LichSuDangKy trước nếu chưa có:
+-- CREATE TABLE LichSuDangKy (
+--     MaDK VARCHAR2(10),
+--     MaKH VARCHAR2(10),
+--     MaHV VARCHAR2(10),
+--     NgayDangKy DATE,
+--     ThoiGianGhiNhan TIMESTAMP
+-- );
+
+CREATE OR REPLACE TRIGGER trg_GhiLichSuDangKy
+AFTER INSERT ON DangKy
+FOR EACH ROW
+BEGIN
+    INSERT INTO LichSuDangKy (MaDK, MaKH, MaHV, NgayDangKy, ThoiGianGhiNhan)
+    VALUES (:NEW.MaDK, :NEW.MaKH, :NEW.MaHV, :NEW.NgayDangKy, SYSTIMESTAMP);
+END;
+/
+
